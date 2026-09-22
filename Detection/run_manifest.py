@@ -123,16 +123,23 @@ def _conversation_provenance(
 
 
 def _effective_labels_provenance(
-    selected_task_ids: Sequence[int], effective_labels: Mapping[str, bool]
+    task_dirs: Iterable[Path], effective_labels: Mapping[str, bool]
 ) -> Dict[str, Any]:
-    labels = []
-    missing = []
-    for task_id in sorted(selected_task_ids):
-        key = f"task_{task_id:03d}"
-        if key not in effective_labels:
+    labels: list[Dict[str, Any]] = []
+    missing: list[int] = []
+    for task_dir in task_dirs:
+        task_id = _task_id(task_dir)
+        if task_id is None:
+            continue
+        if task_dir.name not in effective_labels:
             missing.append(task_id)
         else:
-            labels.append({"task_id": task_id, "is_malicious": bool(effective_labels[key])})
+            labels.append(
+                {"task_id": task_id, "is_malicious": bool(effective_labels[task_dir.name])}
+            )
+
+    labels.sort(key=lambda item: item["task_id"])
+    missing.sort()
     return {
         "algorithm": _HASH_ALGORITHM,
         "count": len(labels),
@@ -166,7 +173,7 @@ def collect_run_manifest(
     except Exception:
         conversations = None
     try:
-        labels = _effective_labels_provenance(selected_task_ids, effective_labels)
+        labels = _effective_labels_provenance(task_dirs, effective_labels)
     except Exception:
         labels = None
     artifacts = {
