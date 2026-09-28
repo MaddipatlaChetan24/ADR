@@ -29,6 +29,7 @@ from .exporters import OpenTelemetryConfigError, load_opentelemetry_config
 from .exporters.delivery_checkpoint import DeliveryCheckpoint, DeliveryCheckpointError
 from .exporters.opentelemetry import OpenTelemetryExportError, OpenTelemetryLogExporter
 from .observer import AgentObserver
+from .sensor_log import append_rotating_line
 
 
 def get_version():
@@ -69,7 +70,7 @@ Examples:
     parser.add_argument(
         "--resource",
         action="store_true",
-        help="Capture process resource usage and append to resource.log (Unix only)",
+        help="Capture process resource usage and append to resource.log, rotated at 1 MiB (Unix only)",
     )
     parser.add_argument(
         "--source",
@@ -299,8 +300,7 @@ Examples:
                     },
                 }
 
-                with open(log_path, "a", encoding="utf-8") as f:
-                    f.write(json.dumps(record, separators=(",", ":"), ensure_ascii=False) + "\n")
+                append_rotating_line(log_path, json.dumps(record, separators=(",", ":"), ensure_ascii=False))
             except Exception:
                 pass
 
