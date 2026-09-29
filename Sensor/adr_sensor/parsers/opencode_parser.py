@@ -17,7 +17,9 @@ Two on-disk storage backends are supported:
    conversation record for local CLI usage; the newer ``session_message`` /
    ``event`` tables are an additional event-sourced projection used for other
    purposes and were empty in every real session captured while building this
-   parser, so they are not read here.
+   parser, so they are not read here. A database is only used if it has the
+   ``session`` / ``message`` / ``part`` tables; otherwise the remaining
+   candidate databases and then the JSON tree below are tried.
 
 2. JSON file tree (older, pre-SQLite versions): a ``storage/`` directory holding
    one JSON file per session / message / part. Both the newer project-scoped
@@ -79,9 +81,15 @@ BUILTIN_TOOLS = frozenset(
     }
 )
 
+# Tables a SQLite database must contain to be read as opencode session history.
+REQUIRED_SQLITE_TABLES = frozenset({"session", "message", "part"})
+
 
 class OpencodeParser(BaseParser):
     """Parser for opencode session logs (SQLite and legacy JSON backends)."""
+
+    # Set by _detect_backend when databases exist but none has the session tables.
+    _schema_mismatch = False
 
     def __init__(self, max_age_days: int = MAX_LOG_AGE_DAYS):
         self.max_age_days = max_age_days
@@ -112,38 +120,71 @@ class OpencodeParser(BaseParser):
         return unique
 
     @staticmethod
-    def _find_db_file(base: Path) -> Optional[Path]:
-        """Locate the opencode SQLite database under a candidate data directory.
+    def _find_db_files(base: Path) -> List[Path]:
+        """List candidate opencode SQLite databases under a data directory.
 
         The ``OPENCODE_DB`` environment variable can override the filename (or be
         an absolute path / ``:memory:``); otherwise the file is ``opencode.db``
         for stable channels or ``opencode-<channel>.db`` for anything else (e.g.
         a nightly build), so we fall back to globbing for that pattern too.
+        Candidates are returned in that priority order, without duplicates.
         """
+        candidates: List[Path] = []
+
         env_db = os.environ.get("OPENCODE_DB")
         if env_db and env_db != ":memory:":
             candidate = Path(env_db)
             if not candidate.is_absolute():
                 candidate = base / env_db
             if candidate.exists():
-                return candidate
+                candidates.append(candidate)
 
         default = base / "opencode.db"
-        if default.exists():
-            return default
+        if default.exists() and default not in candidates:
+            candidates.append(default)
 
         if base.exists():
             for candidate in sorted(base.glob("opencode-*.db")):
-                if candidate.exists():
-                    return candidate
-        return None
+                if candidate.exists() and candidate not in candidates:
+                    candidates.append(candidate)
+        return candidates
+
+    @staticmethod
+    def _find_db_file(base: Path) -> Optional[Path]:
+        """Return the highest-priority candidate database, if any."""
+        candidates = OpencodeParser._find_db_files(base)
+        return candidates[0] if candidates else None
+
+    @staticmethod
+    def _has_session_schema(db_path: Path) -> bool:
+        """Return True if the database has opencode's session tables."""
+        conn = None
+        try:
+            conn = sqlite3.connect(f"file:{db_path}?mode=ro", uri=True)
+            rows = conn.execute("SELECT name FROM sqlite_master WHERE type = 'table'").fetchall()
+        except (sqlite3.Error, OSError):
+            return False
+        finally:
+            if conn is not None:
+                conn.close()
+        return REQUIRED_SQLITE_TABLES <= {row[0] for row in rows}
 
     def _detect_backend(self) -> Tuple[Path, Optional[str], Optional[Path]]:
-        """Return (base_dir, backend, db_path) where backend is 'sqlite', 'json' or None."""
+        """Return (base_dir, backend, db_path) where backend is 'sqlite', 'json' or None.
+
+        A database is selected only if it contains the session tables; otherwise
+        the remaining candidates and then the JSON ``storage/`` tree are tried.
+        This runs before per-run diagnostics are reset, so a database without
+        the expected tables is only remembered here and reported by parse_all.
+        """
+        self._schema_mismatch = False
         for base in self._candidate_base_dirs():
-            db_path = self._find_db_file(base)
-            if db_path is not None:
-                return base, "sqlite", db_path
+            db_files = self._find_db_files(base)
+            for db_path in db_files:
+                if self._has_session_schema(db_path):
+                    return base, "sqlite", db_path
+            if db_files:
+                self._schema_mismatch = True
             storage_dir = base / "storage"
             if storage_dir.exists():
                 return base, "json", None
@@ -160,8 +201,15 @@ class OpencodeParser(BaseParser):
 
         if self.backend == "json":
             storage_dir = self.base_dir / "storage"
+            if self._schema_mismatch:
+                logger.info("[OPENCODE] SQLite database lacks the session tables; reading JSON storage")
             logger.info("[OPENCODE] Reading JSON logs from %s", storage_dir)
             return self._parse_json_storage(storage_dir)
+
+        if self._schema_mismatch:
+            logger.info("[OPENCODE] Database found but it does not contain the expected session tables")
+            self.record_diagnostic("unsupported_schema")
+            return []
 
         logger.info("[OPENCODE] No logs found at %s", self.base_dir)
         self.record_diagnostic("input_missing")
@@ -193,9 +241,23 @@ class OpencodeParser(BaseParser):
                     )
                     if entry and entry.has_meaningful_content():
                         entries.append(entry)
+                except sqlite3.OperationalError as e:
+                    # A missing table affects every session: stop and report it once.
+                    if "no such table" in str(e):
+                        raise
+                    self.record_diagnostic("session_build_error")
+                    print(f"[OPENCODE] Error processing session {session_id}: {e}")
                 except Exception as e:
                     self.record_diagnostic("session_build_error")
                     logger.warning("[OPENCODE] Error processing session %s: %s", session_id, e)
+        except sqlite3.OperationalError as e:
+            # The schema can change between backend detection and parsing.
+            if "no such table" in str(e):
+                self.record_diagnostic("unsupported_schema")
+                logger.warning("[OPENCODE] Expected session tables not found in database")
+            else:
+                self.record_diagnostic("database_error")
+                logger.warning("[OPENCODE] Error reading database: %s", e)
         except Exception as e:
             self.record_diagnostic("database_error")
             logger.error("[OPENCODE] Error reading database: %s", e)
