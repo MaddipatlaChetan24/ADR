@@ -1,12 +1,12 @@
 """OTLP/HTTP logs exporter for normalized ADR Sensor records."""
 
 import os
-import socket
 import threading
 import time
 from datetime import datetime, timezone
 from typing import Any, List, Optional, Tuple
 
+from .. import host_identity
 from ..diagnostics import sanitize_health_record
 from ..schemas.agent_event_schema import AgentEvent
 from ..schemas.system_config_schema import SystemConfiguration
@@ -42,13 +42,15 @@ class OpenTelemetryLogExporter:
             export_result_cls,
         ) = components
 
-        resource = resource_cls.create(
-            {
-                "service.name": config.service_name,
-                "service.version": service_version,
-                "host.name": socket.gethostname(),
-            }
-        )
+        resource_attributes = {
+            "service.name": config.service_name,
+            "service.version": service_version,
+            "host.name": host_identity.hostname(),
+        }
+        # OpenTelemetry semantic convention: lower-case OS family, e.g. "linux", "darwin", "windows".
+        if host_identity.host_os():
+            resource_attributes["os.type"] = host_identity.host_os().lower()
+        resource = resource_cls.create(resource_attributes)
         self._provider = logger_provider_cls(resource=resource)
 
         record_exporter = _log_record_exporter

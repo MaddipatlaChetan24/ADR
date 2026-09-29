@@ -13,6 +13,7 @@ from opentelemetry.sdk._logs.export import (
 )
 from requests import Response
 
+from adr_sensor import host_identity
 from adr_sensor.diagnostics import health_record
 from adr_sensor.exporters.config import OpenTelemetryConfig
 from adr_sensor.exporters.opentelemetry import (
@@ -82,6 +83,23 @@ def test_export_preserves_complete_agent_event_payload():
     assert record.resource.attributes["service.name"] == "adr-sensor"
     assert record.resource.attributes["service.version"] == "1.2.3"
 
+    exporter.shutdown()
+
+
+@pytest.mark.parametrize(("system", "expected"), [("Darwin", "darwin"), (None, None)])
+def test_resource_includes_os_type_when_known(monkeypatch, system, expected):
+    monkeypatch.setattr(host_identity, "host_os", lambda: system)
+    memory_exporter = InMemoryLogRecordExporter()
+    exporter = OpenTelemetryLogExporter(
+        OpenTelemetryConfig(endpoint="http://localhost:4318/v1/logs"),
+        service_version="1.2.3",
+        _log_record_exporter=memory_exporter,
+        _processor_factory=SimpleLogRecordProcessor,
+    )
+
+    exporter.export([_event()], [])
+
+    assert memory_exporter.get_finished_logs()[0].resource.attributes.get("os.type") == expected
     exporter.shutdown()
 
 
