@@ -7,7 +7,11 @@ from unittest.mock import MagicMock
 import pytest
 
 from guardrail.base_detector import DetectionResult
-from main_detector import BenchmarkAnalyzer, find_latest_benchmark_results, validate_benchmark_results_dir
+from main_detector import (
+    BenchmarkAnalyzer,
+    find_latest_benchmark_results,
+    validate_benchmark_results_dir,
+)
 
 
 class _FixedDetector:
@@ -68,9 +72,7 @@ class TestProcessBenchmarkResults:
         (ws / "claude_conversation.json").write_text(
             '{"messages": [{"role": "user", "content": "hi"}]}'
         )
-        (bench / "ground_truth.json").write_text(
-            json.dumps({"task_001": {"is_malicious": True}})
-        )
+        (bench / "ground_truth.json").write_text(json.dumps({"task_001": {"is_malicious": True}}))
 
         detector = _FixedDetector({"task_001"})
         analyzer = BenchmarkAnalyzer(detector)
@@ -101,7 +103,9 @@ class TestProcessBenchmarkResults:
         assert saved["run_manifest"]["kind"] == "run_provenance"
         assert saved["run_manifest"]["benchmark_type"] == "adr_bench"
         assert saved["run_manifest"]["selected_task_ids"] == [1]
-        assert {"detector_info", "analyses", "metrics", "run_stats", "analysis_timestamp"} <= set(saved)
+        assert {"detector_info", "analyses", "metrics", "run_stats", "analysis_timestamp"} <= set(
+            saved
+        )
 
 
 class TestValidateBenchmarkResultsDir:
@@ -142,8 +146,22 @@ class TestBenchmarkAnalyzerMetrics:
     def test_calculate_metrics_perfect_classifier(self):
         analyzer = BenchmarkAnalyzer(_FixedDetector({"task_002"}))
         analyses = [
-            {"task_id": "task_001", "is_malicious": False, "confidence_score": 0.1, "analysis_time": 0.2, "cost_usd": 0.01, "threat_technique": "N/A"},
-            {"task_id": "task_002", "is_malicious": True, "confidence_score": 0.9, "analysis_time": 0.3, "cost_usd": 0.02, "threat_technique": "initial_compromise"},
+            {
+                "task_id": "task_001",
+                "is_malicious": False,
+                "confidence_score": 0.1,
+                "analysis_time": 0.2,
+                "cost_usd": 0.01,
+                "threat_technique": "N/A",
+            },
+            {
+                "task_id": "task_002",
+                "is_malicious": True,
+                "confidence_score": 0.9,
+                "analysis_time": 0.3,
+                "cost_usd": 0.02,
+                "threat_technique": "initial_compromise",
+            },
         ]
         ground_truth = {"task_001": False, "task_002": True}
 
@@ -192,6 +210,27 @@ class TestFindLatestBenchmarkResults:
 
 
 class TestGroundTruthLoading:
+    def test_load_adr_bench_ground_truth_raises_when_tasks_file_is_missing(
+        self, tmp_path: Path, monkeypatch
+    ):
+        monkeypatch.chdir(tmp_path)
+        analyzer = BenchmarkAnalyzer(MagicMock())
+
+        with pytest.raises(FileNotFoundError, match="Ground truth file not found"):
+            analyzer._load_ground_truth("adr_bench")
+
+    def test_load_adr_bench_ground_truth_raises_when_tasks_file_is_invalid(
+        self, tmp_path: Path, monkeypatch
+    ):
+        monkeypatch.chdir(tmp_path)
+        (tmp_path / "tasks.json").write_text("not json")
+        analyzer = BenchmarkAnalyzer(MagicMock())
+
+        with pytest.raises(RuntimeError, match="Error loading ADR-Bench ground truth") as error:
+            analyzer._load_ground_truth("adr_bench")
+
+        assert isinstance(error.value.__cause__, json.JSONDecodeError)
+
     def test_load_agentdojo_ground_truth(self, tmp_path: Path):
         analyzer = BenchmarkAnalyzer(MagicMock())
         analyzer.results_dir = tmp_path

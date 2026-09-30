@@ -9,23 +9,24 @@ and evaluate their performance against ground truth.
 import argparse
 import asyncio
 import json
+import logging
 import sys
 import traceback
-from pathlib import Path
-from typing import Dict, List, Any, Optional
 from datetime import datetime
-import logging
+from pathlib import Path
+from typing import Any, Dict, List, Optional
 
 import numpy as np
 import yaml
 
 # Set up minimal logging
-logging.basicConfig(level=logging.WARNING, format='%(levelname)s - %(message)s')
+logging.basicConfig(level=logging.WARNING, format="%(levelname)s - %(message)s")
 logger = logging.getLogger(__name__)
+
+from guardrail.adr_agent.adr_baseline import ADRBaseline
 
 # Import the baseline detectors
 from guardrail.llamafirewall_agent.llamafirewall_baseline import LlamaFirewallBaseline
-from guardrail.adr_agent.adr_baseline import ADRBaseline
 from run_manifest import collect_run_manifest, collect_source_metadata, read_text_with_sha256
 
 
@@ -48,8 +49,13 @@ class BenchmarkAnalyzer:
         self._artifact_hashes: Dict[str, Optional[str]] = {}
         self._loaded_task_definitions = None
 
-    def process_benchmark_results(self, results_dir_path: str, task_filter: List[int] = None, max_concurrent: int = 10,
-                                  benchmark_type: str = "adr_bench") -> Dict[str, Any]:
+    def process_benchmark_results(
+        self,
+        results_dir_path: str,
+        task_filter: List[int] = None,
+        max_concurrent: int = 10,
+        benchmark_type: str = "adr_bench",
+    ) -> Dict[str, Any]:
         """
         Process all benchmark results and generate analysis.
 
@@ -68,8 +74,11 @@ class BenchmarkAnalyzer:
         self.results_dir = results_path
 
         # Find all task directories (exclude raw AgentDojo output directories)
-        task_dirs = [d for d in results_path.iterdir()
-                     if d.is_dir() and d.name.startswith('task_') and not d.name.endswith('_agentdojo_run')]
+        task_dirs = [
+            d
+            for d in results_path.iterdir()
+            if d.is_dir() and d.name.startswith("task_") and not d.name.endswith("_agentdojo_run")
+        ]
         if not task_dirs:
             raise FileNotFoundError(f"No task directories found in {results_dir_path}")
 
@@ -79,8 +88,8 @@ class BenchmarkAnalyzer:
         source_metadata = self._source_metadata or collect_source_metadata(Path(__file__).parent)
         self._conversation_hashes = {}
         self._artifact_hashes = {
-            'config_detector': self._config_sha256,
-            'uv_lock': source_metadata['uv_lock'],
+            "config_detector": self._config_sha256,
+            "uv_lock": source_metadata["uv_lock"],
         }
         self._loaded_task_definitions = None
 
@@ -93,7 +102,11 @@ class BenchmarkAnalyzer:
 
         # Run analysis
         analyses, run_stats = self._analyze_tasks_efficiently(
-            sorted(task_dirs), task_filter, max_concurrent, benchmark_type, ground_truth,
+            sorted(task_dirs),
+            task_filter,
+            max_concurrent,
+            benchmark_type,
+            ground_truth,
             task_definitions=self._loaded_task_definitions,
         )
 
@@ -103,7 +116,9 @@ class BenchmarkAnalyzer:
         selected_task_dirs = task_dirs
         if task_filter:
             selected_names = {f"task_{task_id:03d}" for task_id in task_filter}
-            selected_task_dirs = [task_dir for task_dir in task_dirs if task_dir.name in selected_names]
+            selected_task_dirs = [
+                task_dir for task_dir in task_dirs if task_dir.name in selected_names
+            ]
         run_manifest = collect_run_manifest(
             benchmark_type=benchmark_type,
             task_dirs=selected_task_dirs,
@@ -111,28 +126,49 @@ class BenchmarkAnalyzer:
             resolved_concurrency=max_concurrent,
             conversation_hashes=self._conversation_hashes,
             artifact_hashes=self._artifact_hashes,
-            source=source_metadata['source'],
+            source=source_metadata["source"],
         )
 
         return {
-            'detector_info': self.detector.get_info(),
-            'analyses': analyses,
-            'metrics': metrics,
-            'run_stats': run_stats,
-            'analysis_timestamp': datetime.now().isoformat(),
-            'run_manifest': run_manifest
+            "detector_info": self.detector.get_info(),
+            "analyses": analyses,
+            "metrics": metrics,
+            "run_stats": run_stats,
+            "analysis_timestamp": datetime.now().isoformat(),
+            "run_manifest": run_manifest,
         }
 
-    def _analyze_tasks_efficiently(self, task_dirs: List[Path], task_filter: List[int] = None, max_concurrent: int = 10,
-                                  benchmark_type: str = "adr_bench", ground_truth_dict: Dict[str, bool] = None,
-                                  task_definitions: Dict[str, Any] = None) -> tuple[List[Dict[str, Any]], Dict[str, int]]:
+    def _analyze_tasks_efficiently(
+        self,
+        task_dirs: List[Path],
+        task_filter: List[int] = None,
+        max_concurrent: int = 10,
+        benchmark_type: str = "adr_bench",
+        ground_truth_dict: Dict[str, bool] = None,
+        task_definitions: Dict[str, Any] = None,
+    ) -> tuple[List[Dict[str, Any]], Dict[str, int]]:
         """Analyze tasks using the detector in an optimized manner."""
         # Run the async analysis in a new event loop
-        return asyncio.run(self._analyze_tasks_async(task_dirs, task_filter, max_concurrent, benchmark_type, ground_truth_dict, task_definitions))
+        return asyncio.run(
+            self._analyze_tasks_async(
+                task_dirs,
+                task_filter,
+                max_concurrent,
+                benchmark_type,
+                ground_truth_dict,
+                task_definitions,
+            )
+        )
 
-    async def _analyze_tasks_async(self, task_dirs: List[Path], task_filter: List[int] = None, max_concurrent: int = 10,
-                                  benchmark_type: str = "adr_bench", ground_truth_dict: Dict[str, bool] = None,
-                                  task_definitions: Dict[str, Any] = None) -> tuple[List[Dict[str, Any]], Dict[str, int]]:
+    async def _analyze_tasks_async(
+        self,
+        task_dirs: List[Path],
+        task_filter: List[int] = None,
+        max_concurrent: int = 10,
+        benchmark_type: str = "adr_bench",
+        ground_truth_dict: Dict[str, bool] = None,
+        task_definitions: Dict[str, Any] = None,
+    ) -> tuple[List[Dict[str, Any]], Dict[str, int]]:
         """Analyze tasks using the detector with parallel processing."""
         analyses = []
 
@@ -152,7 +188,7 @@ class BenchmarkAnalyzer:
             tasks_file = Path("tasks.json")
             if benchmark_type == "adr_bench" and tasks_file.exists():
                 text, digest = read_text_with_sha256(tasks_file)
-                self._artifact_hashes['tasks'] = digest
+                self._artifact_hashes["tasks"] = digest
                 tasks_data = json.loads(text)
                 del text
                 for task in tasks_data.get("tasks", []):
@@ -162,22 +198,26 @@ class BenchmarkAnalyzer:
         semaphore = asyncio.Semaphore(max_concurrent)
         print(f"🚀 Starting parallel analysis with max {max_concurrent} concurrent tasks...")
 
-        detector_name = self.detector.get_info().get('name', '')
-        if 'ADR' in detector_name:
-            is_escalated = lambda method: 'Reasoning' in method
+        detector_name = self.detector.get_info().get("name", "")
+        if "ADR" in detector_name:
+            is_escalated = lambda method: "Reasoning" in method
         else:
             is_escalated = None
 
         async def analyze_single_task(task_dir: Path, index: int) -> Dict[str, Any]:
             """Analyze a single task with semaphore control."""
             async with semaphore:
-                return await self._analyze_task_async(task_dir, index, total_tasks, task_definitions, benchmark_type, ground_truth_dict)
+                return await self._analyze_task_async(
+                    task_dir,
+                    index,
+                    total_tasks,
+                    task_definitions,
+                    benchmark_type,
+                    ground_truth_dict,
+                )
 
         # Create tasks for parallel execution
-        task_futures = [
-            analyze_single_task(task_dir, i)
-            for i, task_dir in enumerate(task_dirs, 1)
-        ]
+        task_futures = [analyze_single_task(task_dir, i) for i, task_dir in enumerate(task_dirs, 1)]
 
         # Execute tasks concurrently and collect results
         completed = 0
@@ -190,11 +230,11 @@ class BenchmarkAnalyzer:
                 result = await future
                 if result:
                     analyses.append(result)
-                    tp += result.get('is_true_positive', False)
-                    tn += result.get('is_true_negative', False)
-                    fp += result.get('is_false_positive', False)
-                    fn += result.get('is_false_negative', False)
-                    if is_escalated and is_escalated(result.get('method', '')):
+                    tp += result.get("is_true_positive", False)
+                    tn += result.get("is_true_negative", False)
+                    fp += result.get("is_false_positive", False)
+                    fn += result.get("is_false_negative", False)
+                    if is_escalated and is_escalated(result.get("method", "")):
                         escalated += 1
                 else:
                     dropped += 1
@@ -204,10 +244,20 @@ class BenchmarkAnalyzer:
                 if completed % 10 == 0 or completed == total_tasks:
                     progress = (completed / total_tasks) * 100
                     scored = len(analyses)
-                    acc_str = f" | Acc: {(tp+tn)/scored*100:.1f}% TP={tp} TN={tn} FP={fp} FN={fn}" if scored else ""
-                    esc_str = f" | Esc: {escalated}/{scored} ({escalated/scored*100:.1f}%)" if (is_escalated and scored) else ""
+                    acc_str = (
+                        f" | Acc: {(tp+tn)/scored*100:.1f}% TP={tp} TN={tn} FP={fp} FN={fn}"
+                        if scored
+                        else ""
+                    )
+                    esc_str = (
+                        f" | Esc: {escalated}/{scored} ({escalated/scored*100:.1f}%)"
+                        if (is_escalated and scored)
+                        else ""
+                    )
                     drop_str = f" | Dropped: {dropped}" if dropped else ""
-                    print(f"📊 Progress: {completed}/{total_tasks} ({progress:.1f}%){acc_str}{esc_str}{drop_str}")
+                    print(
+                        f"📊 Progress: {completed}/{total_tasks} ({progress:.1f}%){acc_str}{esc_str}{drop_str}"
+                    )
 
             except Exception as e:
                 print(f"❌ Task analysis failed: {e}")
@@ -222,17 +272,26 @@ class BenchmarkAnalyzer:
         scored = len(analyses)
         print(f"✅ Scored {scored}/{total_tasks} tasks in {elapsed_str} ({rate:.1f} tasks/sec)")
         if dropped:
-            print(f"⚠️  {dropped} task(s) dropped (missing conversation or analysis error) — excluded from metrics")
+            print(
+                f"⚠️  {dropped} task(s) dropped (missing conversation or analysis error) — excluded from metrics"
+            )
 
         run_stats = {
-            'total_tasks': total_tasks,
-            'scored': scored,
-            'dropped': dropped,
+            "total_tasks": total_tasks,
+            "scored": scored,
+            "dropped": dropped,
         }
         return analyses, run_stats
 
-    async def _analyze_task_async(self, task_dir: Path, index: int, total_tasks: int,
-                                 task_definitions: Dict[str, Any], benchmark_type: str, ground_truth_dict: Dict[str, bool]) -> Dict[str, Any]:
+    async def _analyze_task_async(
+        self,
+        task_dir: Path,
+        index: int,
+        total_tasks: int,
+        task_definitions: Dict[str, Any],
+        benchmark_type: str,
+        ground_truth_dict: Dict[str, bool],
+    ) -> Dict[str, Any]:
         """Analyze a single task asynchronously."""
         task_id = task_dir.name
         try:
@@ -243,7 +302,7 @@ class BenchmarkAnalyzer:
                 return None
 
             # Load the structured conversation file
-            text, digest = read_text_with_sha256(conversation_file, encoding='utf-8')
+            text, digest = read_text_with_sha256(conversation_file, encoding="utf-8")
             self._conversation_hashes[task_id] = digest
             conversation_data = json.loads(text)
             del text
@@ -260,14 +319,11 @@ class BenchmarkAnalyzer:
                     mcp_system_msg = {
                         "role": "system",
                         "content": f"Task uses MCP servers: {mcp_servers}",
-                        "mcp_servers": mcp_servers  # Direct field for extraction
+                        "mcp_servers": mcp_servers,  # Direct field for extraction
                     }
                     messages.insert(0, mcp_system_msg)
 
-            task_data = {
-                'task_id': task_id,
-                'messages': messages
-            }
+            task_data = {"task_id": task_id, "messages": messages}
 
             # Analyze using the detector in thread pool
             result = await asyncio.to_thread(self.detector.analyze_task, task_data)
@@ -283,18 +339,18 @@ class BenchmarkAnalyzer:
             task_meta = task_definitions.get(task_id, {})
 
             # Add ground truth and metadata
-            analysis['ground_truth'] = "malicious" if gt_is_malicious else "benign"
-            analysis['ground_truth_binary'] = gt_is_malicious
-            analysis['threat_technique'] = task_meta.get('threat_technique', 'N/A')
-            analysis['threat_tactic'] = task_meta.get('threat_tactic', 'N/A')
+            analysis["ground_truth"] = "malicious" if gt_is_malicious else "benign"
+            analysis["ground_truth_binary"] = gt_is_malicious
+            analysis["threat_technique"] = task_meta.get("threat_technique", "N/A")
+            analysis["threat_tactic"] = task_meta.get("threat_tactic", "N/A")
 
             # Calculate correctness
-            is_correct = (result.is_malicious == gt_is_malicious)
-            analysis['is_correct'] = is_correct
-            analysis['is_true_positive'] = result.is_malicious and gt_is_malicious
-            analysis['is_false_positive'] = result.is_malicious and not gt_is_malicious
-            analysis['is_true_negative'] = not result.is_malicious and not gt_is_malicious
-            analysis['is_false_negative'] = not result.is_malicious and gt_is_malicious
+            is_correct = result.is_malicious == gt_is_malicious
+            analysis["is_correct"] = is_correct
+            analysis["is_true_positive"] = result.is_malicious and gt_is_malicious
+            analysis["is_false_positive"] = result.is_malicious and not gt_is_malicious
+            analysis["is_true_negative"] = not result.is_malicious and not gt_is_malicious
+            analysis["is_false_negative"] = not result.is_malicious and gt_is_malicious
 
             # Print task + result atomically to prevent progress bar interleaving
             pred = "🚨 MALICIOUS" if result.is_malicious else "✅ BENIGN"
@@ -303,17 +359,23 @@ class BenchmarkAnalyzer:
 
             # For ADR, indicate if triage-only or reasoning agent was used
             method_info = ""
-            if 'ADR' in self.detector.get_info().get('name', ''):
-                method = analysis.get('method', '')
-                if 'Triage' in method and 'Reasoning' not in method:
+            if "ADR" in self.detector.get_info().get("name", ""):
+                method = analysis.get("method", "")
+                if "Triage" in method and "Reasoning" not in method:
                     method_info = " [Triage Only]"
-                elif 'Reasoning' in method:
+                elif "Reasoning" in method:
                     method_info = " [Reasoning+MCP]"
 
             error_type = ""
             if not is_correct:
-                error_type = " [FP]" if analysis.get('is_false_positive') else (" [FN]" if analysis.get('is_false_negative') else " [UNKNOWN]")
-            print(f"📊 [{index}/{total_tasks}] Analyzing {task_id}... Pred: {pred} | GT: {gt} {check}{error_type}{method_info}")
+                error_type = (
+                    " [FP]"
+                    if analysis.get("is_false_positive")
+                    else (" [FN]" if analysis.get("is_false_negative") else " [UNKNOWN]")
+                )
+            print(
+                f"📊 [{index}/{total_tasks}] Analyzing {task_id}... Pred: {pred} | GT: {gt} {check}{error_type}{method_info}"
+            )
 
             return analysis
 
@@ -337,21 +399,20 @@ class BenchmarkAnalyzer:
             tasks_file = Path("tasks.json")
 
             if not tasks_file.exists():
-                logger.error(f"Ground truth file not found: {tasks_file.absolute()}")
-                return {}
+                raise FileNotFoundError(f"Ground truth file not found: {tasks_file.absolute()}")
 
             try:
-                text, digest = read_text_with_sha256(tasks_file, encoding='utf-8')
-                self._artifact_hashes['tasks'] = digest
+                text, digest = read_text_with_sha256(tasks_file, encoding="utf-8")
+                self._artifact_hashes["tasks"] = digest
                 tasks_data = json.loads(text)
                 del text
 
                 ground_truth = {}
                 task_definitions = {}
                 # Handle the current format where tasks is a list
-                for task in tasks_data['tasks']:
+                for task in tasks_data["tasks"]:
                     task_id = f"task_{task['task_id']:03d}"
-                    ground_truth[task_id] = task.get('ground_truth', 'benign') == 'malicious'
+                    ground_truth[task_id] = task.get("ground_truth", "benign") == "malicious"
                     task_definitions[task_id] = task
 
                 self._loaded_task_definitions = task_definitions
@@ -361,16 +422,20 @@ class BenchmarkAnalyzer:
 
             except Exception as e:
                 logger.error(f"Error loading ADR-Bench ground truth: {e}")
-                return {}
+                raise RuntimeError(
+                    f"Error loading ADR-Bench ground truth from {tasks_file}: {e}"
+                ) from e
 
         elif benchmark_type == "agentdojo":
             # Load ground truth from ground_truth.json
             ground_truth_file = Path(self.results_dir) / "ground_truth.json"
             if not ground_truth_file.exists():
-                raise FileNotFoundError(f"AgentDojo ground truth file not found: {ground_truth_file.absolute()}")
+                raise FileNotFoundError(
+                    f"AgentDojo ground truth file not found: {ground_truth_file.absolute()}"
+                )
 
             text, digest = read_text_with_sha256(ground_truth_file)
-            self._artifact_hashes['agentdojo_ground_truth'] = digest
+            self._artifact_hashes["agentdojo_ground_truth"] = digest
             agentdojo_ground_truth = json.loads(text)
             del text
 
@@ -386,7 +451,9 @@ class BenchmarkAnalyzer:
         else:
             raise ValueError(f"Unknown benchmark type: {benchmark_type}")
 
-    def _convert_conversation_to_messages(self, conversation_data: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    def _convert_conversation_to_messages(
+        self, conversation_data: List[Dict[str, Any]]
+    ) -> List[Dict[str, Any]]:
         """
         Convert structured conversation data to message list.
 
@@ -400,52 +467,39 @@ class BenchmarkAnalyzer:
 
         try:
             for entry in conversation_data:
-                role = entry.get('role', 'user')
-                content = entry.get('content', '')
-                tool_calls = entry.get('tool_calls', [])
-                message_type = entry.get('message_type', 'unknown')
+                role = entry.get("role", "user")
+                content = entry.get("content", "")
+                tool_calls = entry.get("tool_calls", [])
+                message_type = entry.get("message_type", "unknown")
 
                 # Handle different message types
-                if message_type == 'user_prompt':
-                    messages.append({
-                        'role': 'user',
-                        'content': content
-                    })
+                if message_type == "user_prompt":
+                    messages.append({"role": "user", "content": content})
 
-                elif message_type == 'agent_response':
-                    messages.append({
-                        'role': 'assistant',
-                        'content': content
-                    })
+                elif message_type == "agent_response":
+                    messages.append({"role": "assistant", "content": content})
 
-                elif message_type == 'tool_calling':
+                elif message_type == "tool_calling":
                     # Include tool calling information in assistant message
                     tool_info = []
                     for tool_call in tool_calls:
-                        tool_name = tool_call.get('name', 'unknown_tool')
-                        tool_id = tool_call.get('id', 'unknown_id')
+                        tool_name = tool_call.get("name", "unknown_tool")
+                        tool_id = tool_call.get("id", "unknown_id")
                         tool_info.append(f"[TOOL_USE: {tool_name} (id: {tool_id})]")
 
-                    tool_content = ' '.join(tool_info) if tool_info else '[TOOL_USE]'
-                    messages.append({
-                        'role': 'assistant',
-                        'content': f"{content} {tool_content}".strip()
-                    })
+                    tool_content = " ".join(tool_info) if tool_info else "[TOOL_USE]"
+                    messages.append(
+                        {"role": "assistant", "content": f"{content} {tool_content}".strip()}
+                    )
 
-                elif message_type == 'tool_result':
+                elif message_type == "tool_result":
                     tool_content = content
 
-                    messages.append({
-                        'role': 'tool',
-                        'content': tool_content
-                    })
+                    messages.append({"role": "tool", "content": tool_content})
 
                 # Handle any other message types as generic messages
                 elif content:
-                    messages.append({
-                        'role': role,
-                        'content': content
-                    })
+                    messages.append({"role": role, "content": content})
 
         except Exception as e:
             logger.error(f"Error converting conversation data: {e}")
@@ -453,7 +507,9 @@ class BenchmarkAnalyzer:
 
         return messages
 
-    def _calculate_metrics(self, analyses: List[Dict[str, Any]], ground_truth: Dict[str, bool]) -> Dict[str, Any]:
+    def _calculate_metrics(
+        self, analyses: List[Dict[str, Any]], ground_truth: Dict[str, bool]
+    ) -> Dict[str, Any]:
         """
         Calculate comprehensive performance metrics for paper.
 
@@ -477,26 +533,26 @@ class BenchmarkAnalyzer:
         threat_techniques = []
 
         for analysis in analyses:
-            task_id = analysis['task_id']
+            task_id = analysis["task_id"]
 
             # Use ground truth - no fallbacks!
             if task_id in ground_truth:
-                predictions.append(analysis['is_malicious'])
+                predictions.append(analysis["is_malicious"])
                 labels.append(ground_truth[task_id])
-                confidence_scores.append(analysis.get('confidence_score', 0.5))
+                confidence_scores.append(analysis.get("confidence_score", 0.5))
 
                 # Collect latency if available
-                analysis_time = analysis.get('analysis_time')
+                analysis_time = analysis.get("analysis_time")
                 if analysis_time is not None:
                     latencies.append(analysis_time)
 
                 # Collect cost if available
-                cost_usd = analysis.get('cost_usd')
+                cost_usd = analysis.get("cost_usd")
                 if cost_usd is not None:
                     costs.append(cost_usd)
 
                 # Collect threat technique
-                threat_techniques.append(analysis.get('threat_technique', 'N/A'))
+                threat_techniques.append(analysis.get("threat_technique", "N/A"))
             else:
                 raise ValueError(f"No ground truth found for {task_id}")
 
@@ -513,38 +569,40 @@ class BenchmarkAnalyzer:
         # Calculate basic metrics
         precision = tp / (tp + fp) if (tp + fp) > 0 else 0.0
         recall = tp / (tp + fn) if (tp + fn) > 0 else 0.0
-        f1_score = 2 * (precision * recall) / (precision + recall) if (precision + recall) > 0 else 0.0
+        f1_score = (
+            2 * (precision * recall) / (precision + recall) if (precision + recall) > 0 else 0.0
+        )
         accuracy = (tp + tn) / (tp + tn + fp + fn) if (tp + tn + fp + fn) > 0 else 0.0
 
         # Calculate latency statistics
         latency_stats = {}
         if latencies:
             latency_stats = {
-                'mean_ms': float(np.mean(latencies) * 1000),
-                'median_ms': float(np.median(latencies) * 1000),
-                'p95_ms': float(np.percentile(latencies, 95) * 1000),
-                'p99_ms': float(np.percentile(latencies, 99) * 1000),
-                'min_ms': float(np.min(latencies) * 1000),
-                'max_ms': float(np.max(latencies) * 1000),
-                'total_samples': len(latencies)
+                "mean_ms": float(np.mean(latencies) * 1000),
+                "median_ms": float(np.median(latencies) * 1000),
+                "p95_ms": float(np.percentile(latencies, 95) * 1000),
+                "p99_ms": float(np.percentile(latencies, 99) * 1000),
+                "min_ms": float(np.min(latencies) * 1000),
+                "max_ms": float(np.max(latencies) * 1000),
+                "total_samples": len(latencies),
             }
 
         # Calculate cost statistics
         cost_stats = {}
         if costs:
             cost_stats = {
-                'mean_usd': float(np.mean(costs)),
-                'median_usd': float(np.median(costs)),
-                'total_usd': float(np.sum(costs)),
-                'min_usd': float(np.min(costs)),
-                'max_usd': float(np.max(costs)),
-                'total_samples': len(costs)
+                "mean_usd": float(np.mean(costs)),
+                "median_usd": float(np.median(costs)),
+                "total_usd": float(np.sum(costs)),
+                "min_usd": float(np.min(costs)),
+                "max_usd": float(np.max(costs)),
+                "total_samples": len(costs),
             }
 
         # Calculate per-threat metrics
         threat_metrics = {}
         for threat in set(threat_techniques):
-            if threat == 'N/A':
+            if threat == "N/A":
                 continue
 
             indices = [i for i, t in enumerate(threat_techniques) if t == threat]
@@ -553,35 +611,35 @@ class BenchmarkAnalyzer:
 
             t_tp = sum(1 for pred, label in zip(t_preds, t_labels) if pred and label)
             threat_metrics[threat] = {
-                'samples': len(indices),
-                'precision': t_tp / sum(t_preds) if sum(t_preds) > 0 else 0,
-                'recall': t_tp / sum(t_labels) if sum(t_labels) > 0 else 0
+                "samples": len(indices),
+                "precision": t_tp / sum(t_preds) if sum(t_preds) > 0 else 0,
+                "recall": t_tp / sum(t_labels) if sum(t_labels) > 0 else 0,
             }
 
         # Calculate class distribution
         class_distribution = {
-            'malicious_percentage': (sum(labels) / len(labels) * 100) if labels else 0,
-            'benign_percentage': ((len(labels) - sum(labels)) / len(labels) * 100) if labels else 0
+            "malicious_percentage": (sum(labels) / len(labels) * 100) if labels else 0,
+            "benign_percentage": ((len(labels) - sum(labels)) / len(labels) * 100) if labels else 0,
         }
 
         return {
-            'confusion_matrix': {
-                'true_positives': tp,
-                'true_negatives': tn,
-                'false_positives': fp,
-                'false_negatives': fn
+            "confusion_matrix": {
+                "true_positives": tp,
+                "true_negatives": tn,
+                "false_positives": fp,
+                "false_negatives": fn,
             },
-            'precision': precision,
-            'recall': recall,
-            'f1_score': f1_score,
-            'accuracy': accuracy,
-            'total_samples': len(predictions),
-            'malicious_samples': sum(labels),
-            'benign_samples': len(labels) - sum(labels),
-            'class_distribution': class_distribution,
-            'latency_stats': latency_stats,
-            'cost_stats': cost_stats,
-            'per_threat_metrics': threat_metrics
+            "precision": precision,
+            "recall": recall,
+            "f1_score": f1_score,
+            "accuracy": accuracy,
+            "total_samples": len(predictions),
+            "malicious_samples": sum(labels),
+            "benign_samples": len(labels) - sum(labels),
+            "class_distribution": class_distribution,
+            "latency_stats": latency_stats,
+            "cost_stats": cost_stats,
+            "per_threat_metrics": threat_metrics,
         }
 
 
@@ -632,19 +690,19 @@ def find_latest_benchmark_results(results_dir: Path, benchmark_type: str = "adr_
 
 def print_analysis_summary(analysis: Dict[str, Any]):
     """Print a formatted summary of the analysis results with all paper-relevant metrics."""
-    metrics = analysis.get('metrics', {})
-    analyses = analysis.get('analyses', [])
-    detector_info = analysis.get('detector_info', {})
+    metrics = analysis.get("metrics", {})
+    analyses = analysis.get("analyses", [])
+    detector_info = analysis.get("detector_info", {})
 
-    print("\n" + "="*80)
+    print("\n" + "=" * 80)
     print("🔍 BASELINE ANALYSIS RESULTS - Paper Metrics")
-    print("="*80)
+    print("=" * 80)
 
     print(f"🔧 Detector: {detector_info.get('name', 'Unknown')}")
-    run_stats = analysis.get('run_stats', {})
-    total_tasks = run_stats.get('total_tasks')
-    scored = run_stats.get('scored', len(analyses))
-    dropped = run_stats.get('dropped', 0)
+    run_stats = analysis.get("run_stats", {})
+    total_tasks = run_stats.get("total_tasks")
+    scored = run_stats.get("scored", len(analyses))
+    dropped = run_stats.get("dropped", 0)
     if total_tasks is not None:
         print(f"📊 Tasks scored: {scored}/{total_tasks}")
         if dropped:
@@ -652,14 +710,18 @@ def print_analysis_summary(analysis: Dict[str, Any]):
     else:
         print(f"📊 Total Tasks Analyzed: {len(analyses)}")
 
-    malicious_count = sum(1 for a in analyses if a.get('is_malicious', False))
+    malicious_count = sum(1 for a in analyses if a.get("is_malicious", False))
     print(f"🚨 Detected Malicious: {malicious_count}")
     print(f"✅ Detected Benign: {len(analyses) - malicious_count}")
 
     # For ADR, show breakdown of triage vs reasoning paths
-    if 'ADR' in detector_info.get('name', ''):
-        triage_only = sum(1 for a in analyses if 'Triage' in a.get('method', '') and 'Reasoning' not in a.get('method', ''))
-        reasoning = sum(1 for a in analyses if 'Reasoning' in a.get('method', ''))
+    if "ADR" in detector_info.get("name", ""):
+        triage_only = sum(
+            1
+            for a in analyses
+            if "Triage" in a.get("method", "") and "Reasoning" not in a.get("method", "")
+        )
+        reasoning = sum(1 for a in analyses if "Reasoning" in a.get("method", ""))
         total = len(analyses)
         print("\n🔀 ADR Detection Path Breakdown:")
         if total > 0:
@@ -680,21 +742,25 @@ def print_analysis_summary(analysis: Dict[str, Any]):
         print(f"   Accuracy:  {metrics.get('accuracy', 0):.4f}")
 
         # Class distribution
-        class_dist = metrics.get('class_distribution', {})
+        class_dist = metrics.get("class_distribution", {})
         if class_dist:
             print("\n📊 Class Distribution:")
             print(f"   Malicious: {class_dist.get('malicious_percentage', 0):.1f}%")
             print(f"   Benign:    {class_dist.get('benign_percentage', 0):.1f}%")
 
         # Confusion matrix
-        cm = metrics.get('confusion_matrix', {})
+        cm = metrics.get("confusion_matrix", {})
         if cm:
             print("\n📋 Confusion Matrix:")
-            print(f"   True Positives:  {cm.get('true_positives', 0):3d}  |  False Positives: {cm.get('false_positives', 0):3d}")
-            print(f"   False Negatives: {cm.get('false_negatives', 0):3d}  |  True Negatives:  {cm.get('true_negatives', 0):3d}")
+            print(
+                f"   True Positives:  {cm.get('true_positives', 0):3d}  |  False Positives: {cm.get('false_positives', 0):3d}"
+            )
+            print(
+                f"   False Negatives: {cm.get('false_negatives', 0):3d}  |  True Negatives:  {cm.get('true_negatives', 0):3d}"
+            )
 
         # Latency statistics
-        latency_stats = metrics.get('latency_stats', {})
+        latency_stats = metrics.get("latency_stats", {})
         if latency_stats:
             print("\n⏱️  LATENCY STATISTICS (Figure 1b in Paper)")
             print("=" * 80)
@@ -708,7 +774,7 @@ def print_analysis_summary(analysis: Dict[str, Any]):
             print("\n⏱️  LATENCY STATISTICS: Not available (analysis_time not captured)")
 
         # Cost statistics
-        cost_stats = metrics.get('cost_stats', {})
+        cost_stats = metrics.get("cost_stats", {})
         if cost_stats:
             print("\n💰 COST STATISTICS (Figure 1c in Paper)")
             print("=" * 80)
@@ -721,7 +787,7 @@ def print_analysis_summary(analysis: Dict[str, Any]):
             print("\n💰 COST STATISTICS: Not available (detectors not tracking cost yet)")
 
         # Per-threat-technique metrics
-        threat_metrics = metrics.get('per_threat_metrics', {})
+        threat_metrics = metrics.get("per_threat_metrics", {})
         if threat_metrics:
             print("\n🎯 PER-THREAT TECHNIQUE METRICS")
             print("=" * 80)
@@ -730,7 +796,9 @@ def print_analysis_summary(analysis: Dict[str, Any]):
             for threat, stats in sorted(threat_metrics.items()):
                 precision_str = f"{stats.get('precision', 0):.4f}"
                 recall_str = f"{stats.get('recall', 0):.4f}"
-                print(f"{threat:<50} {precision_str:>10} {recall_str:>10} {stats.get('samples', 0):>8}")
+                print(
+                    f"{threat:<50} {precision_str:>10} {recall_str:>10} {stats.get('samples', 0):>8}"
+                )
 
     # Summary for reproducibility
     print("\n" + "=" * 80)
@@ -741,13 +809,13 @@ def print_analysis_summary(analysis: Dict[str, Any]):
     print("✅ Per-task metadata (threat technique, tactic) included")
     print("✅ Confusion matrix components (TP/TN/FP/FN) calculated")
 
-    if metrics.get('latency_stats'):
+    if metrics.get("latency_stats"):
         print("✅ Latency statistics available")
     else:
         print("⚠️  Latency data incomplete (many null analysis_time values)")
 
     print(f"\n💾 Results saved to: {analysis.get('output_file', 'N/A')}")
-    print("="*80)
+    print("=" * 80)
 
 
 def main():
@@ -757,20 +825,41 @@ def main():
         epilog="Default detector is adr (ADR dual-agent). For keyless smoke tests, use --detector llamafirewall.",
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
-    parser.add_argument("--detector", default="adr",
-                       choices=["llamafirewall", "adr"],
-                       help="Detector to use for analysis (default: adr — ADR dual-agent)")
-    parser.add_argument("--benchmark", default="adr_bench",
-                       choices=["adr_bench", "agentdojo"],
-                       help="Benchmark type to analyze (default: adr_bench)")
-    parser.add_argument("--results-dir", type=str,
-                       help="Path to benchmark results directory (default: latest adr_bench_* under benchmark/)")
-    parser.add_argument("--tasks", type=str,
-                       help="Task IDs to analyze (e.g., --tasks 109,110 or --tasks 109 or --tasks 1-5)")
-    parser.add_argument("--task-range", nargs=2, type=int, metavar=("START", "END"),
-                       help="Range of task IDs to analyze (e.g., --task-range 1 20)")
-    parser.add_argument("--concurrent", type=int, metavar="N",
-                       help="Maximum concurrent analyses (default: from config or 10)")
+    parser.add_argument(
+        "--detector",
+        default="adr",
+        choices=["llamafirewall", "adr"],
+        help="Detector to use for analysis (default: adr — ADR dual-agent)",
+    )
+    parser.add_argument(
+        "--benchmark",
+        default="adr_bench",
+        choices=["adr_bench", "agentdojo"],
+        help="Benchmark type to analyze (default: adr_bench)",
+    )
+    parser.add_argument(
+        "--results-dir",
+        type=str,
+        help="Path to benchmark results directory (default: latest adr_bench_* under benchmark/)",
+    )
+    parser.add_argument(
+        "--tasks",
+        type=str,
+        help="Task IDs to analyze (e.g., --tasks 109,110 or --tasks 109 or --tasks 1-5)",
+    )
+    parser.add_argument(
+        "--task-range",
+        nargs=2,
+        type=int,
+        metavar=("START", "END"),
+        help="Range of task IDs to analyze (e.g., --task-range 1 20)",
+    )
+    parser.add_argument(
+        "--concurrent",
+        type=int,
+        metavar="N",
+        help="Maximum concurrent analyses (default: from config or 10)",
+    )
     args = parser.parse_args()
 
     print(f"🔍 {args.benchmark.upper().replace('_', '-')} Benchmark - Baseline Analysis")
@@ -790,10 +879,18 @@ def main():
         print(f"⚠️  Configuration file {config_file} not found, using defaults")
 
     # Get detection configuration
-    detection_config = config_data.get('detection', {})
+    detection_config = config_data.get("detection", {})
 
     # Use CLI argument or config value or default
-    max_concurrent = (args.concurrent if args.concurrent is not None else detection_config.get('max_concurrent', 10)) if args.detector != "llamafirewall" else 1
+    max_concurrent = (
+        (
+            args.concurrent
+            if args.concurrent is not None
+            else detection_config.get("max_concurrent", 10)
+        )
+        if args.detector != "llamafirewall"
+        else 1
+    )
     if max_concurrent < 1:
         raise ValueError(f"max_concurrent must be >= 1, got {max_concurrent}")
     print(f"🚀 Parallel analysis: {max_concurrent} concurrent tasks")
@@ -814,9 +911,13 @@ def main():
             print(f"❌ Error: {e}")
             if args.benchmark == "adr_bench":
                 print("💡 Inflate the packed benchmark or run main_benchmark.py:")
-                print("   python benchmark/benchmark_pack.py inflate benchmark/adr_bench_20251017_151604.jsonl")
+                print(
+                    "   python benchmark/benchmark_pack.py inflate benchmark/adr_bench_20251017_151604.jsonl"
+                )
             else:
-                print("💡 Run AgentDojo benchmark first: python main_benchmark.py --benchmark agentdojo")
+                print(
+                    "💡 Run AgentDojo benchmark first: python main_benchmark.py --benchmark agentdojo"
+                )
             sys.exit(1)
 
     try:
@@ -830,8 +931,8 @@ def main():
 
     if args.detector == "llamafirewall":
         # Extract LlamaFirewall configuration
-        llamafirewall_config = config_data.get('llamafirewall', {})
-        model_name = llamafirewall_config.get('model', 'gpt-4o-mini')
+        llamafirewall_config = config_data.get("llamafirewall", {})
+        model_name = llamafirewall_config.get("model", "gpt-4o-mini")
 
         detector = LlamaFirewallBaseline(model_name=model_name, **llamafirewall_config)
         if detector.is_available():
@@ -839,12 +940,15 @@ def main():
             print("   🛡️ Scanners: PromptGuard, AlignmentCheck")
     elif args.detector == "adr":
         # Extract ADR configuration
-        ads_config = config_data.get('adr_framework') if config_data else None
+        ads_config = config_data.get("adr_framework") if config_data else None
 
         # ADR is a modular dual-agent system with dynamic MCP discovery
-        detector = ADRBaseline(config_data={'adr_framework': ads_config} if ads_config else None, benchmark_type=args.benchmark)
+        detector = ADRBaseline(
+            config_data={"adr_framework": ads_config} if ads_config else None,
+            benchmark_type=args.benchmark,
+        )
         if detector.is_available():
-            config_info = detector.get_info()['config']
+            config_info = detector.get_info()["config"]
             print(f"   📋 ADR Architecture: {config_info['architecture']}")
             print(f"   🔍 Triage Model: {config_info['triage_model']}")
             print(f"   🧠 Reasoning Model: {config_info['reasoning_model']}")
@@ -855,7 +959,9 @@ def main():
     if not detector.is_available():
         print(f"❌ {args.detector} not available - please install dependencies")
         if args.detector == "adr":
-            print("💡 ADR (adr) requires: ANTHROPIC_API_KEY, OPENAI_API_KEY, and Claude CLI (`claude` on PATH)")
+            print(
+                "💡 ADR (adr) requires: ANTHROPIC_API_KEY, OPENAI_API_KEY, and Claude CLI (`claude` on PATH)"
+            )
             print("💡 For keyless smoke tests, use: --detector llamafirewall")
         sys.exit(1)
     else:
@@ -874,19 +980,19 @@ def main():
         task_ids = []
 
         # Parse different range formats
-        if ',' in task_range:
+        if "," in task_range:
             # Multiple specific tasks: "1,3,5"
-            for part in task_range.split(','):
+            for part in task_range.split(","):
                 part = part.strip()
-                if '-' in part:
+                if "-" in part:
                     # Range within comma-separated list: "1,3-5,7"
-                    start, end = map(int, part.split('-'))
+                    start, end = map(int, part.split("-"))
                     task_ids.extend(range(start, end + 1))
                 else:
                     task_ids.append(int(part))
-        elif '-' in task_range:
+        elif "-" in task_range:
             # Range: "1-5"
-            start, end = map(int, task_range.split('-'))
+            start, end = map(int, task_range.split("-"))
             task_ids = list(range(start, end + 1))
         else:
             # Single task: "3"
@@ -911,12 +1017,14 @@ def main():
         suffix = ""
         if args.detector == "adr":
             try:
-                ads_cfg = config_data.get('adr_framework', {}) if config_data else {}
-                reasoning_cfg = ads_cfg.get('reasoning_agent', {}) if isinstance(ads_cfg, dict) else {}
-                enable_ti = reasoning_cfg.get('enable_threat_intelligence', True)
-                enable_source_code = reasoning_cfg.get('enable_source_code', True)
-                enable_policy = reasoning_cfg.get('enable_policy', True)
-                enable_triage = ads_cfg.get('enable_triage', True)
+                ads_cfg = config_data.get("adr_framework", {}) if config_data else {}
+                reasoning_cfg = (
+                    ads_cfg.get("reasoning_agent", {}) if isinstance(ads_cfg, dict) else {}
+                )
+                enable_ti = reasoning_cfg.get("enable_threat_intelligence", True)
+                enable_source_code = reasoning_cfg.get("enable_source_code", True)
+                enable_policy = reasoning_cfg.get("enable_policy", True)
+                enable_triage = ads_cfg.get("enable_triage", True)
                 if not enable_ti:
                     suffix += "-woeas"
                 if not enable_source_code:
@@ -928,9 +1036,9 @@ def main():
             except Exception:
                 suffix = ""
         output_file = latest_results / f"{args.detector}_baseline_analysis{suffix}.json"
-        analysis['output_file'] = str(output_file)  # Add output file path for summary
+        analysis["output_file"] = str(output_file)  # Add output file path for summary
 
-        with open(output_file, 'w') as f:
+        with open(output_file, "w") as f:
             json.dump(analysis, f, indent=2)
 
         print(f"💾 Analysis saved to: {output_file}")
