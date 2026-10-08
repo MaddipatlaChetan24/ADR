@@ -312,7 +312,15 @@ Examples:
                 user_cpu = _delta("ru_utime")
                 sys_cpu = _delta("ru_stime")
 
-                raw_maxrss = getattr(end_self, "ru_maxrss", 0)
+                # CPU time above is aggregated across this process and any
+                # children it spawned (e.g. parsers that shell out). Memory
+                # must be aggregated the same way, or a run whose peak RSS
+                # happened in a child process would be silently underreported
+                # using only ru_maxrss from RUSAGE_SELF.
+                raw_maxrss = max(
+                    getattr(end_self, "ru_maxrss", 0),
+                    getattr(end_children, "ru_maxrss", 0),
+                )
                 if host_os == "Darwin":
                     max_rss_bytes = int(raw_maxrss)
                 else:
