@@ -48,10 +48,14 @@ def from_network(gate, kernel_candidates: tuple[Candidate, ...] = ()) -> tuple[C
                     )
                 )
             elif s.state == "LISTEN" and s.local_port in LOCAL_MODEL_PORTS:
+                # Attributed to the serving process when it is known, so an
+                # identified runtime carries the port as evidence instead of
+                # the port standing alone and being dropped.
+                process = processes.get(s.pid)
                 out.append(
                     Candidate(
                         kind="model_port",
-                        path=f"tcp:{s.local_port}",
+                        path=process.path if process is not None else f"tcp:{s.local_port}",
                         source="network:listening",
                         priority=Priority.HOME,
                         detail={"port": s.local_port, "pid": s.pid},

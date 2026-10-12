@@ -175,7 +175,10 @@ def _observation_from(gate, candidate: Candidate, verdict) -> Observation:
     if candidate.source.startswith("package:"):
         detail["install_method"] = candidate.source.split(":", 1)[1]
     evidence = verdict.evidence
-    if candidate.source.startswith("network:"):
+    if candidate.source == "network:listening":
+        evidence += (Evidence("enumerator", Channel.NETWORK, candidate.path,
+                              f"listening on local model port {candidate.detail.get('port')}", 0.6),)
+    elif candidate.source.startswith("network:"):
         remote = str(candidate.detail.get("remote_host") or candidate.path)
         provider = str(candidate.detail.get("provider_host") or remote)
         # A name the socket carried is direct; an address matched to a name
@@ -203,7 +206,7 @@ def _observation_from(gate, candidate: Candidate, verdict) -> Observation:
         real_path=real_path,
         inode=inode,
         modified=_modified(stat),
-        liveness=Liveness.RUNNING if candidate.kind == "process" else Liveness.INSTALLED,
+        liveness=Liveness.RUNNING if _is_live(candidate) else Liveness.INSTALLED,
         evidence=evidence,
         detail=detail,
     )
@@ -313,6 +316,13 @@ def _declarations_by_asset(assets: tuple[Asset, ...], declarations) -> dict[str,
         if found is not None:
             out[asset.asset_id] = found
     return out
+
+
+def _is_live(candidate: Candidate) -> bool:
+    """A process, or a socket some process holds open right now."""
+    if candidate.kind == "process":
+        return True
+    return candidate.source.startswith("network:") and candidate.detail.get("pid") is not None
 
 
 def _modified(stat) -> str | None:

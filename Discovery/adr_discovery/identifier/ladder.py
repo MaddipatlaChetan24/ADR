@@ -165,6 +165,7 @@ def _by_provenance(gate, candidate: Candidate, catalog):
     basename = candidate.path.rstrip("/").rsplit("/", 1)[-1]
     ownership_relevant = (
         candidate.kind in ("process", "exec_event")
+        or (candidate.kind in SOCKET_KINDS and candidate.path.startswith("/"))
         or catalog.match("binaries", basename) is not None
     )
     if not ownership_relevant:
@@ -182,8 +183,11 @@ def _by_provenance(gate, candidate: Candidate, catalog):
     return None, (), None, None
 
 
+#: Socket candidates. Their path is the owning process's executable when
+#: the process is known, and a host or port otherwise.
+SOCKET_KINDS = frozenset({"network_peer", "model_port"})
 #: Candidates that are an executable on disk, or a process running one.
-LAYOUT_KINDS = frozenset({"binary", "process", "exec_event", "network_peer"})
+LAYOUT_KINDS = frozenset({"binary", "process", "exec_event"}) | SOCKET_KINDS
 
 
 def _by_layout(gate, candidate: Candidate, catalog):
