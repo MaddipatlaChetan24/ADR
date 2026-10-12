@@ -10,12 +10,18 @@ from __future__ import annotations
 
 from dataclasses import replace
 
-from ..contracts.records import Asset, Declaration, Finding, Risk
+from ..contracts.records import Asset, Declaration, Finding, Kind, Risk
 from .findings import findings_for
 from .risk import credential_reach, pinning, transport_of, unattended
 from .sanction import EMPTY, Policy, state_for
 
 __all__ = ["judge", "Policy", "EMPTY"]
+
+#: Declared kinds that start a process. Launch risk (pinning, inherited
+#: environment, transport) is meaningful only for these; for a file such as
+#: CLAUDE.md or a skill it would be invented, e.g. "stdio" and "inherits
+#: every credential".
+LAUNCHING_KINDS = frozenset({Kind.MCP_SERVER, Kind.MCP_BUNDLE, Kind.HOOK, Kind.CI_AGENT})
 
 
 def judge(assets: tuple[Asset, ...], declarations: dict[str, Declaration],
@@ -38,6 +44,8 @@ def _risk_for(asset: Asset, declaration: Declaration | None, ledger) -> Risk:
     if declaration is None:
         # Nothing new to say. Keep whatever earlier stages established
         # rather than overwriting it with an empty verdict.
+        return asset.risk
+    if declaration.kind not in LAUNCHING_KINDS:
         return asset.risk
 
     pinned, factors = pinning(declaration.command, declaration.args)
