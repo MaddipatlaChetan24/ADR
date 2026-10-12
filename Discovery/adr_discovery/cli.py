@@ -47,6 +47,8 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--allow-cross-endpoint", action="store_true",
                    help="permit a diff between two different hosts")
     p.add_argument("--max-entries", type=int, default=200_000, help="shared sweep ceiling")
+    p.add_argument("--max-children", type=int, default=5_000,
+                   help="largest directory whose subdirectories are still walked")
     return p
 
 
@@ -88,7 +90,7 @@ def main(argv: list[str] | None = None) -> int:
     gate = Gate(
         root=args.root,
         ledger=Ledger(),
-        budget=Budget(max_entries=args.max_entries),
+        budget=Budget(max_entries=args.max_entries, max_children=args.max_children),
         providers=for_host() if args.root == "/" else None,
         env=dict(os.environ),
     )

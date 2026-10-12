@@ -31,6 +31,8 @@ from .budget import Budget
 from .platform.base import Providers
 
 T = TypeVar("T")
+#: First line of a valid CACHEDIR.TAG (https://bford.info/cachedir/).
+_CACHEDIR_SIGNATURE = b"Signature: 8a477f597d28d172789f06886806bc55"
 _HELPER_PATH = "/usr/bin:/bin:/usr/sbin:/sbin"
 
 
@@ -342,9 +344,12 @@ class Gate:
             if not listing.ok:
                 continue
             deepest = max(deepest, depth)
+            prune = self._prune_reason(path, listing.value)
             for entry in listing.value:
                 count += 1
                 yield entry
+                if prune:
+                    continue
                 if entry.is_dir and not entry.is_symlink and entry.path not in seen:
                     if descend is not None and not descend(entry.path):
                         continue
@@ -352,6 +357,28 @@ class Gate:
                     frontier.append((entry.path, depth + 1))
 
         self.ledger.swept(logical_root, deepest, count)
+
+    def _prune_reason(self, path: str, entries: tuple[Entry, ...]) -> str | None:
+        """Why this directory's subtrees should not be walked, recorded.
+
+        Both tests use only the listing already paid for, and name no tool:
+        a tagged cache and a directory with a runaway fan-out look the same
+        whoever made them.
+        """
+        for entry in entries:
+            if entry.path.endswith("/CACHEDIR.TAG") and not entry.is_dir:
+                tag = self.read_bytes(entry.path, limit=len(_CACHEDIR_SIGNATURE))
+                if tag.ok and tag.value == _CACHEDIR_SIGNATURE:
+                    self.ledger.boundary(path, "cache_dir", "CACHEDIR.TAG; subtrees not walked")
+                    return "cache_dir"
+                break
+        if len(entries) > self.budget.max_children:
+            self.ledger.boundary(
+                path, "fan_out",
+                f"{len(entries)} children; cap {self.budget.max_children}; subtrees not walked",
+            )
+            return "fan_out"
+        return None
 
     # ------------------------------------------------------------ processes
 

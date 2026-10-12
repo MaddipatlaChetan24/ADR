@@ -18,6 +18,9 @@ class Budget:
     max_read_bytes: int = 4 * 1024 * 1024
     max_entries: int = 200_000
     max_depth: int = 12
+    #: A directory listing more entries than this is a store, not a place
+    #: anyone keeps agents: its own entries are read, its subtrees are not.
+    max_children: int = 5000
     max_subprocess_seconds: float = 5.0
     max_subprocess_output_bytes: int = 4 * 1024 * 1024
     max_strings_bytes: int = 512 * 1024

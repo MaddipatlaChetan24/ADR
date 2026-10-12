@@ -29,3 +29,45 @@ def test_excluded_tree_costs_no_budget(world):
     assert gate.budget.entries_used < 50, "a skipped tree must not be listed or charged"
     assert _paths(found, "/.claude/skills")
     assert not _boundaries(gate, "budget_exhausted")
+
+
+CACHEDIR_TAG = "Signature: 8a477f597d28d172789f06886806bc55\n# a cache\n"
+
+
+def test_tagged_cache_dir_is_not_descended(world):
+    world.file("/Users/alice/build/CACHEDIR.TAG", CACHEDIR_TAG)
+    world.file("/Users/alice/build/inner/skills/s/SKILL.md", "x")
+    world.file("/Users/alice/proj/.claude/settings.json", "{}")
+    gate = world.gate()
+
+    found = enumerate_candidates(gate)
+
+    assert not any("/build/inner" in c.path for c in found)
+    assert _paths(found, "/proj/.claude")
+    assert {b.path for b in _boundaries(gate, "cache_dir")} == {"/Users/alice/build"}
+
+
+def test_untagged_lookalike_is_still_walked(world):
+    world.file("/Users/alice/build/CACHEDIR.TAG", "not the signature\n")
+    world.file("/Users/alice/build/inner/skills/s/SKILL.md", "x")
+    gate = world.gate()
+
+    found = enumerate_candidates(gate)
+
+    assert _paths(found, "/build/inner/skills")
+    assert not _boundaries(gate, "cache_dir")
+
+
+def test_fan_out_directory_yields_entries_but_not_subtrees(world):
+    for i in range(60):
+        world.file(f"/Users/alice/store/d{i:02d}/deep/skills/s", "x")
+    world.file("/Users/alice/store/.claude/settings.json", "{}")
+    gate = world.gate(budget=Budget(max_entries=50_000, max_children=50))
+
+    found = enumerate_candidates(gate)
+
+    assert _paths(found, "/store/.claude"), "entries of the large directory are still read"
+    assert not any("/deep" in c.path for c in found)
+    hits = _boundaries(gate, "fan_out")
+    assert {b.path for b in hits} == {"/Users/alice/store"}
+    assert all("61 children" in b.detail for b in hits)
