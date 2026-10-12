@@ -7,7 +7,7 @@ import json
 import pytest
 
 from adr_discovery.catalog.load import CatalogError, loads
-from adr_discovery.contracts.evidence import Rung
+from adr_discovery.contracts.evidence import Channel, Rung
 from adr_discovery.contracts.records import Kind, Liveness
 from adr_discovery.pipeline import discover
 
@@ -54,6 +54,18 @@ def test_a_process_running_a_release_merges_into_the_install(world, catalog):
     assert asset.liveness is Liveness.RUNNING
     # The launcher's release is what runs next; the process is the previous one.
     assert asset.version == "2.1.287"
+
+
+def test_a_running_install_is_seen_through_two_channels(world, catalog):
+    _installed(world, "2.1.287")
+    idle, = _claude(discover(world.gate(), catalog))
+    world.surface("processes", [{"pid": 7, "exe": f"{VERSIONS}/2.1.287", "user": "a"}])
+
+    running, = _claude(discover(world.gate(), catalog))
+
+    assert idle.confidence.channels == (Channel.FILESYSTEM,)
+    assert running.confidence.channels == (Channel.FILESYSTEM, Channel.RUNTIME)
+    assert running.confidence.label == "medium"
 
 
 def test_install_identity_is_the_same_whether_or_not_it_runs(world, catalog):

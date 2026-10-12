@@ -175,6 +175,12 @@ def _observation_from(gate, candidate: Candidate, verdict) -> Observation:
     if candidate.source.startswith("package:"):
         detail["install_method"] = candidate.source.split(":", 1)[1]
     evidence = verdict.evidence
+    if candidate.kind == "process":
+        # The identifying proof is about the file; that it is executing is a
+        # separate fact from the process table, so it counts as a second
+        # channel rather than repeating the filesystem one.
+        evidence += (Evidence("enumerator", Channel.RUNTIME, candidate.path,
+                              "a running process executes this file", 0.9),)
     if candidate.source == "network:listening":
         evidence += (Evidence("enumerator", Channel.NETWORK, candidate.path,
                               f"listening on local model port {candidate.detail.get('port')}", 0.6),)
