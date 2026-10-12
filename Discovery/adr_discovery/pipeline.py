@@ -63,9 +63,7 @@ def discover(
 
     # -- M3 ------------------------------------------------------------
     declarations: list[tuple[Candidate, Declaration]] = []
-    for candidate in candidates:
-        if candidate.kind not in CONFIG_KINDS:
-            continue
+    for candidate in _dedupe_surfaces(gate, candidates):
         if candidate.kind == "marker_dir" and surface_for(candidate.path) is None:
             continue  # a repository marker locates work; it declares nothing
         extraction = extract(gate, candidate)
@@ -124,6 +122,34 @@ def discover(
 
 
 # --------------------------------------------------------------- adapters
+
+
+def _dedupe_surfaces(gate, candidates) -> list[Candidate]:
+    """Config surfaces to read, each real file once.
+
+    The config-template source and the sweep both reach `~/.claude.json`;
+    reading it twice doubles its declarations and evidence. The first
+    candidate is kept (registries run before the sweep, so it is the one
+    with the stronger priority) and later ones contribute their sources.
+    """
+    from dataclasses import replace
+
+    kept: dict[tuple[str, str], Candidate] = {}
+    for candidate in candidates:
+        if candidate.kind not in CONFIG_KINDS:
+            continue
+        stat = gate.stat(candidate.path)
+        key = (candidate.kind, stat.value.real_path if stat.ok else candidate.path)
+        first = kept.get(key)
+        if first is None:
+            kept[key] = candidate
+            continue
+        sources = tuple(first.detail.get("sources") or (first.source,))
+        if candidate.source not in sources:
+            sources += (candidate.source,)
+        detail = {**candidate.detail, **first.detail, "sources": sources}
+        kept[key] = replace(first, detail=detail, priority=min(first.priority, candidate.priority))
+    return list(kept.values())
 
 
 def _observation_from(gate, candidate: Candidate, verdict) -> Observation:
