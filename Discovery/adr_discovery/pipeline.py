@@ -142,7 +142,8 @@ def _dedupe_surfaces(gate, candidates) -> list[Candidate]:
         if candidate.kind not in CONFIG_KINDS:
             continue
         stat = gate.stat(candidate.path)
-        key = (candidate.kind, stat.value.real_path if stat.ok else candidate.path)
+        real = stat.value.real_path if stat.ok else candidate.path
+        key = (candidate.kind, real)
         first = kept.get(key)
         if first is None:
             kept[key] = candidate
@@ -150,9 +151,26 @@ def _dedupe_surfaces(gate, candidates) -> list[Candidate]:
         sources = tuple(first.detail.get("sources") or (first.source,))
         if candidate.source not in sources:
             sources += (candidate.source,)
-        detail = {**candidate.detail, **first.detail, "sources": sources}
+        aliases = tuple(first.detail.get("aliases", ())) + (candidate.path,)
+        detail = {**candidate.detail, **first.detail, "sources": sources, "aliases": aliases}
         kept[key] = replace(first, detail=detail, priority=min(first.priority, candidate.priority))
-    return list(kept.values())
+    return [_at_real_path(c, real) for (_, real), c in kept.items()]
+
+
+def _at_real_path(candidate: Candidate, real: str) -> Candidate:
+    """Name a surface by the file itself, and keep the links that reach it.
+
+    `CLAUDE.md -> AGENTS.md` is one file two agents load. Which path the walk
+    met first must not decide the asset's identity, and the link is the
+    evidence that the second agent reads it.
+    """
+    from dataclasses import replace
+
+    paths = {candidate.path, *candidate.detail.get("aliases", ())}
+    aliases = tuple(sorted(p for p in paths if p != real))
+    if candidate.path == real and not aliases:
+        return candidate
+    return replace(candidate, path=real, detail={**candidate.detail, "aliases": aliases})
 
 
 def _observation_from(gate, candidate: Candidate, verdict) -> Observation:
@@ -252,8 +270,19 @@ def _observation_from_declaration(candidate: Candidate, declaration: Declaration
         evidence=(
             Evidence("extractor", Channel.CONFIG, declaration.path,
                      f"declared in {declaration.scope} scope", 0.85),
-        ),
+        ) + _alias_evidence(candidate, declaration),
         detail=detail,
+    )
+
+
+def _alias_evidence(candidate: Candidate, declaration: Declaration) -> tuple[Evidence, ...]:
+    # Only where the file itself is the asset. A link to a config file says
+    # nothing about each server declared inside it.
+    if declaration.kind is not Kind.INSTRUCTIONS or declaration.path != candidate.path:
+        return ()
+    return tuple(
+        Evidence("enumerator", Channel.CONFIG, alias, f"links to {declaration.path}", 0.85)
+        for alias in candidate.detail.get("aliases", ())
     )
 
 

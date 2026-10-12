@@ -43,3 +43,29 @@ def test_a_symlinked_alias_of_the_same_file_is_read_once(world, catalog):
 
     alpha = [a for a in snapshot.assets if a.name == "alpha"]
     assert len(alpha) == 1 and len(alpha[0].evidence) == 1
+
+
+def test_an_instruction_file_and_its_link_are_one_asset_named_by_the_file(world, catalog):
+    """`CLAUDE.md -> AGENTS.md`: one file two agents load; the link is kept as evidence."""
+    world.dir("/Users/alice")
+    world.file("/Users/alice/proj/AGENTS.md", "# rules\n")
+    world.symlink("/Users/alice/proj/CLAUDE.md", "/Users/alice/proj/AGENTS.md")
+
+    snapshot = discover(world.gate(), catalog)
+
+    (asset,) = [a for a in snapshot.assets if a.kind is Kind.INSTRUCTIONS]
+    assert asset.install_path == "/Users/alice/proj/AGENTS.md"
+    links = [e for e in asset.evidence if e.proof.startswith("links to")]
+    assert [e.path for e in links] == ["/Users/alice/proj/CLAUDE.md"]
+
+
+def test_the_link_met_first_does_not_rename_the_asset(world, catalog):
+    world.dir("/Users/alice")
+    world.file("/Users/alice/proj/rules.md", "# rules\n")
+    # Only the link carries a marker name, so it is the only path enumerated.
+    world.symlink("/Users/alice/proj/CLAUDE.md", "/Users/alice/proj/rules.md")
+
+    (asset,) = [a for a in discover(world.gate(), catalog).assets if a.kind is Kind.INSTRUCTIONS]
+
+    assert asset.install_path == "/Users/alice/proj/rules.md"
+    assert [e.path for e in asset.evidence if e.proof.startswith("links to")] == ["/Users/alice/proj/CLAUDE.md"]
