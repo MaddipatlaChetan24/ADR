@@ -220,6 +220,10 @@ class Asset:
     #: Latest modification time of any file behind the asset, ISO-8601 UTC.
     #: For a skill, its SKILL.md; for a declaration, the declaring file.
     modified: str | None = None
+    #: Versions some process is executing right now. `version` is what the
+    #: install runs next; after an update an older or newer release can
+    #: still be running, and that is worth seeing.
+    running_versions: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True, slots=True)

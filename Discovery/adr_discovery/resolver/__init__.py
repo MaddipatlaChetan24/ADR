@@ -65,6 +65,7 @@ def resolve(observations: tuple[Observation, ...], telemetry: dict[str, str] | N
                 catalog_id=primary.catalog_id,
                 vendor=primary.detail.get("vendor"),
                 version=_version(rows),
+                running_versions=_running_versions(rows),
                 install_path=primary.path,
                 install_root=install_root,
                 install_method=primary.detail.get("install_method"),
@@ -151,6 +152,16 @@ def _version(rows: list[Observation]) -> str | None:
     """
     installed = (r.version for r in rows if r.version and r.liveness is not Liveness.RUNNING)
     return next(installed, None) or next((r.version for r in rows if r.version), None)
+
+
+def _running_versions(rows: list[Observation]) -> tuple[str, ...]:
+    running = {r.version for r in rows if r.version and r.liveness is Liveness.RUNNING}
+    return tuple(sorted(running, key=_version_key))
+
+
+def _version_key(version: str) -> tuple:
+    # Numeric where it can be, so 2.1.10 sorts after 2.1.9.
+    return tuple((0, int(p), "") if p.isdigit() else (1, 0, p) for p in version.split("."))
 
 
 def _hook_field(primary: Observation, key: str) -> str | None:

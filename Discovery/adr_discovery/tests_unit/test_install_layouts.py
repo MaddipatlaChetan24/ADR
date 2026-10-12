@@ -54,6 +54,28 @@ def test_a_process_running_a_release_merges_into_the_install(world, catalog):
     assert asset.liveness is Liveness.RUNNING
     # The launcher's release is what runs next; the process is the previous one.
     assert asset.version == "2.1.287"
+    assert asset.running_versions == ("2.1.296",)
+
+
+def test_every_running_release_is_recorded(world, catalog):
+    _installed(world, "2.1.287", "2.1.296", "2.1.1000")
+    world.surface("processes", [
+        {"pid": 7, "exe": f"{VERSIONS}/2.1.296", "user": "a"},
+        {"pid": 8, "exe": f"{VERSIONS}/2.1.287", "user": "a"},
+        {"pid": 9, "exe": f"{VERSIONS}/2.1.1000", "user": "a"},
+        {"pid": 10, "exe": f"{VERSIONS}/2.1.287", "user": "a"},
+    ])
+
+    (asset,) = _claude(discover(world.gate(), catalog))
+
+    assert asset.version == "2.1.287"
+    assert asset.running_versions == ("2.1.287", "2.1.296", "2.1.1000")
+
+
+def test_an_idle_install_has_no_running_versions(world, catalog):
+    (asset,) = _claude(discover(_installed(world, "2.1.287").gate(), catalog))
+
+    assert asset.running_versions == ()
 
 
 def test_a_running_install_is_seen_through_two_channels(world, catalog):

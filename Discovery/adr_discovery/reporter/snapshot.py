@@ -111,6 +111,7 @@ def _asset(row: dict) -> Asset:
         content_hash=row.get("content_hash"),
         package_id=row.get("package_id"),
         modified=row.get("modified"),
+        running_versions=tuple(row.get("running_versions", ())),
     )
 
 
