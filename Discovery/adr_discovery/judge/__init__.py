@@ -12,7 +12,7 @@ from dataclasses import replace
 
 from ..contracts.records import Asset, Declaration, Finding, Kind, Risk
 from .findings import findings_for
-from .risk import credential_reach, pinning, transport_of, unattended
+from .risk import credential_reach, launch_shape, pinning, transport_of, unattended
 from .sanction import EMPTY, Policy, state_for
 
 __all__ = ["judge", "Policy", "EMPTY"]
@@ -49,9 +49,16 @@ def _risk_for(asset: Asset, declaration: Declaration | None, ledger) -> Risk:
         return asset.risk
 
     pinned, factors = pinning(declaration.command, declaration.args)
-    # A shape we could not read confidently: record the ambiguity and raise
-    # nothing, which is the safe verdict.
-    if pinned is None and declaration.command and not declaration.url and ledger is not None:
+    # A launch command we could not read at all: record the ambiguity and
+    # raise nothing, which is the safe verdict. Local programs, interpreters
+    # and hooks (a shell line, not an MCP launch) are readable and simply
+    # carry no pinning question.
+    if (
+        declaration.kind in (Kind.MCP_SERVER, Kind.MCP_BUNDLE)
+        and not declaration.url
+        and launch_shape(declaration.command, declaration.args) == "unknown"
+        and ledger is not None
+    ):
         ledger.probe("judge", "degraded", f"unreadable launch shape: {declaration.name}")
 
     env_declared = bool(declaration.env_names) or "env" in declaration.raw
