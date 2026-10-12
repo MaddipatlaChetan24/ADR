@@ -302,7 +302,7 @@ class Gate:
 
         if exhausted:
             self.ledger.boundary(
-                logical, "budget_exhausted", f"cap {self.budget.max_entries}; directory truncated"
+                logical, "budget_exhausted", f"cap {self.budget.entry_cap}; directory truncated"
             )
         entries.sort(key=lambda entry: entry.path)
         return Ok(tuple(entries))

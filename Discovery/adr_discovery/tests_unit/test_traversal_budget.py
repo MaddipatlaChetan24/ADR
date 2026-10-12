@@ -86,3 +86,34 @@ def test_one_huge_subtree_does_not_starve_a_deep_sibling(world):
     assert _paths(found, "/small/a/b/c/d/.claude"), "the deep sibling must still be reached"
     assert gate.budget.entries_used <= 300
     assert _boundaries(gate, "budget_exhausted"), "the huge subtree is recorded as cut"
+
+
+def _crowd(world, home: str, siblings: int = 30) -> None:
+    """Many busy top-level directories, each taking its fair turn."""
+    for i in range(siblings):
+        for j in range(10):
+            for k in range(10):
+                world.file(f"{home}/d{i:02d}/s{j}/f{k}", "x")
+
+
+def test_state_roots_are_walked_before_the_generic_sweep(world):
+    home = "/Users/alice"
+    _crowd(world, home)
+    world.file(f"{home}/.claude/plugins/cache/m/p/1.0/skills/s/SKILL.md", "x")
+    gate = world.gate(budget=Budget(max_entries=1000))
+
+    found = enumerate_candidates(gate)
+
+    swept = [c for c in found if c.source == "sweep" and c.path.endswith("/1.0/skills")]
+    assert swept, "a plugin-cache skill must not depend on the home sweep reaching it"
+    assert gate.budget.entries_used <= 1000
+
+
+def test_generic_sweep_leaves_the_reserved_entries(world):
+    _crowd(world, "/Users/alice")
+    gate = world.gate(budget=Budget(max_entries=2000, reserved_walk_entries=500))
+
+    enumerate_candidates(gate)
+
+    assert gate.budget.entries_used <= 1500
+    assert gate.budget.entry_cap == 2000, "a stage ceiling must not outlive its stage"
