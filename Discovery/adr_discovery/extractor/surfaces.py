@@ -54,6 +54,10 @@ def extract_surface(gate, candidate, scope: str):
         return None
 
     entries = [e for e in listing.value if _is_member(e, suffixes, nested)]
+    if nested:
+        # A directory without the manifest is not a member, not a failed
+        # read: `plugins/` also holds `cache/`, `data/`, marketplace clones.
+        entries = [e for e in entries if _manifest_of(gate, e.path, kind)]
     skipped: list[str] = []
     result = per_record(
         entries,
@@ -96,7 +100,7 @@ def _declaration(gate, entry, kind: Kind, scope: str, nested: bool, skipped: lis
     body_path = entry.path
 
     if nested:
-        body_path = _manifest_of(gate, entry.path, kind, name)
+        body_path = _manifest_of(gate, entry.path, kind)
 
     metadata: dict[str, object] = {}
     if body_path.endswith(".md"):
@@ -126,13 +130,11 @@ def _declaration(gate, entry, kind: Kind, scope: str, nested: bool, skipped: lis
     )
 
 
-def _manifest_of(gate, path: str, kind: Kind, name: str) -> str:
+def _manifest_of(gate, path: str, kind: Kind) -> str | None:
     for suffix in MANIFESTS.get(kind, ()):
         if gate.stat(path + suffix).ok:
             return path + suffix
-    raise FileNotFoundError(
-        f"{name}: no {' or '.join(MANIFESTS.get(kind, ('manifest',)))} -- not a {kind.value}"
-    )
+    return None
 
 
 def _as_tuple(value) -> tuple[str, ...]:
