@@ -114,6 +114,18 @@ EDITOR_EXTENSION_ROOTS: tuple[str, ...] = (
     "~/.trae/extensions", "~/.kilo/extensions",
 )
 
+#: The provider hosts worth resolving to match a connection by address.
+#: Each answers from a small fixed set of addresses (one published block, or
+#: a CDN anycast pair), so the address a client connected to is the one a
+#: later lookup returns. Hosts served from rotating pools or per-region edges
+#: (Google APIs, CloudFront) are left out: a lookup there returns a sample,
+#: and their addresses are shared with unrelated services. Per-tenant hosts
+#: (`<resource>.openai.azure.com`, regional Bedrock) have no single name.
+RESOLVABLE_PROVIDER_HOSTS: tuple[str, ...] = (
+    "api.anthropic.com", "api.openai.com", "api.mistral.ai",
+    "api.groq.com", "api.together.xyz", "api.x.ai", "openrouter.ai",
+)
+
 #: Hosts that answer for a model provider. Landscape data, not identity:
 #: a connection here says *something on this machine talks to a model*,
 #: which is a candidate. What it is remains M4's question.

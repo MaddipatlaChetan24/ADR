@@ -56,11 +56,14 @@ uv run adr-discovery \
 Discovery does not execute binaries that it finds. Machine access is bounded,
 and risky text is redacted at collection time.
 
-Socket tables list peer addresses, so to recognise a connection to a model
-provider Discovery resolves the provider hostnames once through the host's
-resolver (bounded to a few seconds, and only when a connection needs it).
-`--no-resolve` turns that off; connections are then matched by hostname only
-and the resolver is recorded as unavailable in coverage.
+Socket tables list peer addresses, not hostnames. By default Discovery sends
+nothing over the network, so a connection is matched to a model provider only
+when its peer is already a name, and the resolver is recorded as unavailable
+in coverage. `--resolve` looks up a short list of provider hostnames once
+through the host's resolver (bounded to a few seconds, and only when a
+connection needs it) and matches peers by address. Only hosts served from a
+small fixed set of addresses are resolved; a match is a review signal, never
+a finding on its own, and it cannot see through a proxy.
 
 ### Policy file
 

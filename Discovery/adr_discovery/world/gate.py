@@ -96,14 +96,15 @@ class Gate:
         budget: Budget | None = None,
         providers: Providers | None = None,
         env: dict[str, str] | None = None,
-        resolve_names: bool = True,
+        resolve_names: bool = False,
     ) -> None:
         self._root = os.path.realpath(root)
         self.ledger = ledger if ledger is not None else Ledger()
         self.budget = budget if budget is not None else Budget()
         self.env = dict(env) if env is not None else {}
         #: Whether provider hostnames may be looked up through the host's
-        #: resolver. Off means no lookup leaves the machine at all.
+        #: resolver. Off by default: a scan sends nothing over the network
+        #: unless the operator asks for it.
         self.resolve_names = resolve_names
         from .platform.base import NullProviders
 
@@ -453,8 +454,8 @@ class Gate:
 
     def resolve(self, hostnames: tuple[str, ...]):
         if not self.resolve_names:
-            self.ledger.unavailable("resolver", "name resolution disabled")
-            return Refused("unavailable", "name resolution disabled")
+            self.ledger.unavailable("resolver", "name resolution not requested (--resolve)")
+            return Refused("unavailable", "name resolution not requested")
         return self.providers.resolve(self, hostnames)
 
     def package_owner(self, path: str):

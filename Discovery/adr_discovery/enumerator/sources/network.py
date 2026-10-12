@@ -15,7 +15,7 @@ from __future__ import annotations
 import ipaddress
 
 from ...contracts.records import Candidate, Priority
-from ..markers import LOCAL_MODEL_PORTS, MODEL_PROVIDER_SUFFIXES, is_model_provider
+from ..markers import LOCAL_MODEL_PORTS, RESOLVABLE_PROVIDER_HOSTS, is_model_provider
 
 
 def from_network(gate, kernel_candidates: tuple[Candidate, ...] = ()) -> tuple[Candidate, ...]:
@@ -106,7 +106,7 @@ def _provider_addresses(gate, sockets) -> dict[str, str]:
     """
     if not any(s.state == "ESTABLISHED" and _address(s.remote_host) for s in sockets):
         return {}
-    resolved = gate.resolve(MODEL_PROVIDER_SUFFIXES)
+    resolved = gate.resolve(RESOLVABLE_PROVIDER_HOSTS)
     if not resolved.ok:
         return {}
     out: dict[str, str] = {}
