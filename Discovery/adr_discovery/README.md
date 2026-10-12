@@ -206,6 +206,7 @@ confidence    derived from channel count, reported as a band
 liveness      running · installed · declared_only
 last_used     from Sensor session telemetry
 risk          {pinned, factors[], credential_kinds[], env_names[], …}
+skill_sha256  skills only: sha256 of the raw SKILL.md bytes (also content_hash, package_id when known)
 hook_event    hooks only: lifecycle event (hook_matcher: tool matcher); the command is never emitted
 ```
 

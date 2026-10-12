@@ -97,7 +97,7 @@ def discover(
             )
 
     for candidate, declaration in declarations:
-        observations.append(_observation_from_declaration(candidate, declaration))
+        observations.append(_observation_from_declaration(candidate, declaration, gate))
 
     # -- M5 ------------------------------------------------------------
     assets = resolve(tuple(observations), telemetry, ledger)
@@ -194,10 +194,16 @@ def _observation_from(gate, candidate: Candidate, verdict) -> Observation:
     )
 
 
-def _observation_from_declaration(candidate: Candidate, declaration: Declaration) -> Observation:
+def _observation_from_declaration(candidate: Candidate, declaration: Declaration, gate=None) -> Observation:
     detail = {"name": declaration.name, "scope": declaration.scope,
               "declared": True, "command": declaration.command}
     detail.update(declaration.raw)
+    if declaration.kind is Kind.SKILL and gate is not None:
+        # sha256 of the raw SKILL.md bytes, exactly: the identity a shared
+        # artifact list uses. One size-capped read, never partial bytes.
+        digest = content_hash(gate, f"{declaration.path.rstrip('/')}/SKILL.md")
+        if digest:
+            detail["skill_sha256"] = digest
     if declaration.kind is not Kind.MCP_SERVER:
         detail["install_method"] = "agent_artifact"
     version = declaration.raw.get("version")

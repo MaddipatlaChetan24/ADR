@@ -206,6 +206,13 @@ class Asset:
     #: Hooks only: the lifecycle event and tool matcher. The command stays private.
     hook_event: str | None = None
     hook_matcher: str | None = None
+    #: Skills only: sha256 of the raw SKILL.md bytes (not the directory, not
+    #: normalized), the identity a known-bad/approved artifact list uses.
+    skill_sha256: str | None = None
+    #: sha256 of the identified file, when one was read within the size cap.
+    content_hash: str | None = None
+    #: "<manager>:<package>" when a package record owns the asset.
+    package_id: str | None = None
 
 
 @dataclass(frozen=True, slots=True)

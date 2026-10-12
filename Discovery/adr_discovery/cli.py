@@ -40,7 +40,7 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--dry-run", action="store_true", help="scan and print, write nothing")
     p.add_argument("--explain", action="store_true", help="print exactly what would leave the machine")
     p.add_argument("--output-dir", default="./output", help="where the snapshot lands")
-    p.add_argument("--policy", help="tenant policy JSON: approved, forbidden, tenant_domains")
+    p.add_argument("--policy", help="tenant policy JSON: approved, forbidden, tenant_domains, approved_indicators, forbidden_indicators")
     p.add_argument("--telemetry", help="JSON mapping catalog id to last-used timestamp")
     p.add_argument("--diff", metavar="SNAPSHOT",
                    help="compare this scan against a previous snapshot and print the delta")

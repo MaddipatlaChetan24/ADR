@@ -158,6 +158,72 @@ def launch_shape(command: str | None, args: tuple[str, ...]) -> str:
     return "local"
 
 
+_PYPI_SPLIT = re.compile(r"(===|==|~=|!=|>=|<=|<|>|@|;| )")
+_ECOSYSTEM_OF_RUNNER = MappingProxyType(
+    {"npx": "npm", "bunx": "npm", "uvx": "pypi", "pipx": "pypi", "pip": "pypi"}
+)
+#: Flags that name the package explicitly, when the first bare word is the
+#: command to run inside it (`uvx --from pkg cmd`, `pipx run --spec pkg cmd`).
+_PACKAGE_FLAGS = MappingProxyType({
+    "npx": ("--package", "-p"),
+    "bunx": ("--package",),
+    "uvx": ("--from",),
+    "pipx": ("--spec",),
+})
+
+
+def normalize_package_name(ecosystem: str, name: str) -> str:
+    name = name.strip().lower()
+    return re.sub(r"[-_.]+", "-", name) if ecosystem == "pypi" else name
+
+
+def package_of(command: str | None, args: tuple[str, ...]) -> tuple[str, str, str | None] | None:
+    """(ecosystem, name, version) of the package a runner launches, or None.
+
+    Reads the same operand `pinning` reads. The version is what the operand
+    pins (`pkg@1.2.3`, `pkg==1.2.3`) and None when it pins nothing, which
+    includes ranges: a range is not a version.
+    """
+    try:
+        command, args = split_line(command, args)
+    except ValueError:
+        return None
+    runner, canonical_args = canonical_launch(command, args)
+    ecosystem = _ECOSYSTEM_OF_RUNNER.get(runner)
+    if ecosystem is None:
+        return None
+
+    operand = None
+    flags = _PACKAGE_FLAGS.get(runner, ())
+    for i, arg in enumerate(canonical_args):
+        flag, eq, inline = arg.partition("=")
+        if flag in flags:
+            operand = inline if eq else (canonical_args[i + 1] if i + 1 < len(canonical_args) else None)
+            break
+    if operand is None:
+        operand, _ = operand_of(command, args)
+    if not operand:
+        return None
+    if runner == "pip" and operand.startswith("-"):
+        return None
+
+    if ecosystem == "npm":
+        at = operand.rfind("@")
+        if at <= 0:
+            name, version = operand, None
+        else:
+            name, version = operand[:at], operand[at + 1:] or None
+    else:
+        parts = _PYPI_SPLIT.split(re.sub(r"\[[^\]]*\]", "", operand), maxsplit=1)
+        name = parts[0]
+        version = None
+        if len(parts) == 3 and parts[1] in ("==", "===", "@"):
+            version = re.split(r"[;, ]", parts[2], maxsplit=1)[0] or None
+    if not name:
+        return None
+    return ecosystem, normalize_package_name(ecosystem, name), version
+
+
 def credential_reach(env_names: tuple[str, ...], env_declared: bool) -> tuple[tuple[str, ...], tuple[str, ...]]:
     """Which secrets could be touched, by name and kind, never by value.
 

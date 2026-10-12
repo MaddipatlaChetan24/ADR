@@ -33,7 +33,7 @@ def judge(assets: tuple[Asset, ...], declarations: dict[str, Declaration],
     for asset in assets:
         declaration = declarations.get(asset.asset_id)
         risk = _risk_for(asset, declaration, ledger)
-        with_risk = replace(asset, risk=risk, sanction=state_for(asset.catalog_id, policy))
+        with_risk = replace(asset, risk=risk, sanction=state_for(asset, policy, declaration))
         judged.append(with_risk)
         findings.extend(findings_for(with_risk, policy))
 
