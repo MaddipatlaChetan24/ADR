@@ -203,6 +203,9 @@ class Asset:
     risk: Risk = field(default_factory=Risk)
     sanction: str = "unknown"
     flags: tuple[str, ...] = ()
+    #: Hooks only: the lifecycle event and tool matcher. The command stays private.
+    hook_event: str | None = None
+    hook_matcher: str | None = None
 
 
 @dataclass(frozen=True, slots=True)

@@ -203,7 +203,7 @@ def _observation_from_declaration(candidate: Candidate, declaration: Declaration
     version = declaration.raw.get("version")
     return Observation(
         kind=declaration.kind,
-        identity=f"{declaration.kind.value}:{declaration.name}",
+        identity=str(declaration.raw.get("identity") or f"{declaration.kind.value}:{declaration.name}"),
         path=declaration.path,
         install_root=_root_of(declaration.path),
         version=version if isinstance(version, str) else None,

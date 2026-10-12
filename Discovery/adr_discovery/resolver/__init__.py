@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from types import MappingProxyType
 
-from ..contracts.records import Asset, Liveness, Observation, Risk
+from ..contracts.records import Asset, Kind, Liveness, Observation, Risk
 from .confidence import band_for
 from .keys import asset_id, identity_of, normalize_root
 from .merge import group
@@ -70,6 +70,8 @@ def resolve(observations: tuple[Observation, ...], telemetry: dict[str, str] | N
                 evidence=evidence,
                 risk=_runtime_risk(rows),
                 flags=_flags(rows),
+                hook_event=_hook_field(primary, "event"),
+                hook_matcher=_hook_field(primary, "matcher"),
             )
         )
     return tuple(assets)
@@ -128,6 +130,13 @@ def _primary(rows: list[Observation]) -> Observation:
     real = [r for r in rows if not r.attribute_of]
     pool = real or rows
     return max(pool, key=lambda r: (bool(r.catalog_id), bool(r.content_hash), bool(r.path)))
+
+
+def _hook_field(primary: Observation, key: str) -> str | None:
+    if primary.kind is not Kind.HOOK:
+        return None
+    value = primary.detail.get(key)
+    return value if isinstance(value, str) else None
 
 
 def _flags(rows: list[Observation]) -> tuple[str, ...]:

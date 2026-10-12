@@ -8,6 +8,7 @@ is the count that was in the file.
 
 from __future__ import annotations
 
+import hashlib
 import re
 from types import MappingProxyType
 
@@ -122,7 +123,7 @@ def extract(gate, candidate: Candidate) -> Extraction:
     if hooks:
         chunks.append(per_record(
             hooks,
-            lambda i, rec: _hook(rec, candidate.path, scope, i),
+            lambda i, rec: _hook(rec, candidate.path, scope),
             candidate.path,
             cap=RECORD_CAP,
         ))
@@ -187,7 +188,7 @@ def _mcpb(document: dict, path: str, scope: str) -> Extraction:
 
 
 def _hook_records(document: dict):
-    """Yield each executable hook independently, preserving its event."""
+    """Yield each executable hook independently: (event, matcher, hook)."""
     block = document.get("hooks")
     if not isinstance(block, dict):
         return
@@ -202,20 +203,32 @@ def _hook_records(document: dict):
                 continue
             for hook in nested:
                 if isinstance(hook, dict) and hook.get("type") == "command" and hook.get("command"):
-                    yield str(event), hook
+                    pattern = matcher.get("matcher")
+                    yield str(event), pattern if isinstance(pattern, str) else None, hook
 
 
-def _hook(record, path: str, scope: str, index: int) -> Declaration:
-    event, body = record
+def _hook(record, path: str, scope: str) -> Declaration:
+    """A hook's identity is what it is, not where it sits in the file.
+
+    Settings path, event, matcher and the scrubbed command fix the digest,
+    so adding or reordering another hook renames nothing. The command is
+    read only to be scrubbed and hashed; it is not kept on the asset.
+    """
+    event, matcher, body = record
     command = as_text(body.get("command"), "command")
     scrubbed = redact.scrub_argv((command,))[0]
+    digest = hashlib.sha256("\0".join((path, event, matcher or "", scrubbed)).encode("utf-8")).hexdigest()[:12]
+    label = f"{event} hook"
+    if matcher:
+        label += f" [{matcher[:40]}]"
     return Declaration(
         kind=Kind.HOOK,
-        name=f"{event} hook {index + 1}",
+        name=f"{label} {digest[:6]}",
         path=path,
         scope=scope,
         command=scrubbed,
-        raw={"event": event, "surface": Kind.HOOK.value},
+        raw={"event": event, "matcher": matcher, "surface": Kind.HOOK.value,
+             "identity": f"hook:{path}:{digest}"},
     )
 
 

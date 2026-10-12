@@ -109,6 +109,8 @@ def _asset(row: dict) -> Asset:
         ),
         sanction=row.get("sanction", "unknown"),
         flags=tuple(row.get("flags", ())),
+        hook_event=row.get("hook_event"),
+        hook_matcher=row.get("hook_matcher"),
     )
 
 
