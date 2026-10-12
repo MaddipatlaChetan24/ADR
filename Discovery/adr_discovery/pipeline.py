@@ -173,9 +173,15 @@ def _observation_from(gate, candidate: Candidate, verdict) -> Observation:
         detail["install_method"] = candidate.source.split(":", 1)[1]
     evidence = verdict.evidence
     if candidate.source.startswith("network:"):
-        host = str(candidate.detail.get("remote_host") or candidate.path)
-        evidence += (Evidence("enumerator", Channel.NETWORK, candidate.path,
-                              f"connected to model provider {host}", 0.75),)
+        remote = str(candidate.detail.get("remote_host") or candidate.path)
+        provider = str(candidate.detail.get("provider_host") or remote)
+        # A name the socket carried is direct; an address matched to a name
+        # by resolution may be a shared CDN address, so it weighs less.
+        proof, weight = (
+            (f"connected to model provider {provider}", 0.75) if provider == remote
+            else (f"connected to {remote}, an address of model provider {provider}", 0.6)
+        )
+        evidence += (Evidence("enumerator", Channel.NETWORK, candidate.path, proof, weight),)
     owner = candidate.detail.get("user")
     if verdict.install_root and not owner and stat.ok:
         # An installer-managed install belongs to whoever owns its files, so

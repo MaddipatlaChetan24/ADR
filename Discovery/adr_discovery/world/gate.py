@@ -96,11 +96,15 @@ class Gate:
         budget: Budget | None = None,
         providers: Providers | None = None,
         env: dict[str, str] | None = None,
+        resolve_names: bool = True,
     ) -> None:
         self._root = os.path.realpath(root)
         self.ledger = ledger if ledger is not None else Ledger()
         self.budget = budget if budget is not None else Budget()
         self.env = dict(env) if env is not None else {}
+        #: Whether provider hostnames may be looked up through the host's
+        #: resolver. Off means no lookup leaves the machine at all.
+        self.resolve_names = resolve_names
         from .platform.base import NullProviders
 
         self.providers = providers if providers is not None else NullProviders()
@@ -446,6 +450,12 @@ class Gate:
 
     def exec_journal(self):
         return self.providers.exec_journal(self)
+
+    def resolve(self, hostnames: tuple[str, ...]):
+        if not self.resolve_names:
+            self.ledger.unavailable("resolver", "name resolution disabled")
+            return Refused("unavailable", "name resolution disabled")
+        return self.providers.resolve(self, hostnames)
 
     def package_owner(self, path: str):
         self.calls["package_owner"] += 1

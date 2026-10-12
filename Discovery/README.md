@@ -56,6 +56,12 @@ uv run adr-discovery \
 Discovery does not execute binaries that it finds. Machine access is bounded,
 and risky text is redacted at collection time.
 
+Socket tables list peer addresses, so to recognise a connection to a model
+provider Discovery resolves the provider hostnames once through the host's
+resolver (bounded to a few seconds, and only when a connection needs it).
+`--no-resolve` turns that off; connections are then matched by hostname only
+and the resolver is recorded as unavailable in coverage.
+
 ### Policy file
 
 A policy sets each asset's `sanction` (`approved`, `forbidden`, `unsanctioned`
