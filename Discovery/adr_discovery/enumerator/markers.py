@@ -61,12 +61,24 @@ STATE_ROOTS: tuple[str, ...] = (
 #: independently of the breadth sweep so a dependency cache cannot hide them.
 CONFIG_FILE_TEMPLATES: tuple[str, ...] = (
     "~/.claude.json",
+    "~/.claude/settings.json",
+    "~/.claude/settings.local.json",
+    # Claude Desktop: Linux (community builds), macOS, Windows.
     "~/.config/claude-desktop/claude_desktop_config.json",
+    "~/Library/Application Support/Claude/claude_desktop_config.json",
+    "~/AppData/Roaming/Claude/claude_desktop_config.json",
     "~/.cursor/mcp.json",
     "~/.codeium/windsurf/mcp_config.json",
+    # VS Code user MCP config, and the Cline extension's settings beside it.
     "~/.config/Code/User/mcp.json",
+    "~/Library/Application Support/Code/User/mcp.json",
+    "~/AppData/Roaming/Code/User/mcp.json",
     "~/.config/Code/User/globalStorage/saoudrizwan.claude-dev/settings/cline_mcp_settings.json",
+    "~/Library/Application Support/Code/User/globalStorage/saoudrizwan.claude-dev/settings/cline_mcp_settings.json",
+    "~/AppData/Roaming/Code/User/globalStorage/saoudrizwan.claude-dev/settings/cline_mcp_settings.json",
+    # Zed reads ~/.config/zed on Linux and macOS; Windows uses %APPDATA%.
     "~/.config/zed/settings.json",
+    "~/AppData/Roaming/Zed/settings.json",
     "~/.config/JetBrains/options/mcp.json",
     "~/.config/opencode/opencode.json",
     "~/.codex/config.toml",
@@ -74,6 +86,8 @@ CONFIG_FILE_TEMPLATES: tuple[str, ...] = (
     "~/.bashrc",
     "~/.zshrc",
     "/etc/claude-code/managed-settings.json",
+    "/Library/Application Support/ClaudeCode/managed-settings.json",
+    "/Library/Application Support/ClaudeCode/managed-mcp.json",
     "/etc/adr/managed-mcp.json",
 )
 
