@@ -323,38 +323,52 @@ class Gate:
 
         Breadth-first on purpose: a budget exhausted late still covered the
         likely places, which is not true of a depth-first walk that spends
-        everything in the first deep subtree it meets.
+        everything in the first deep subtree it meets. Breadth is also taken
+        across the root's children, not only by depth: see the queues below.
         """
         depth_cap = self.budget.max_depth if max_depth is None else max_depth
-        frontier = deque([(logical_root, 0)])
         seen: set[str] = set()
         deepest = 0
         count = 0
 
-        while frontier:
-            path, depth = frontier.popleft()
-            if depth > depth_cap:
-                self.ledger.boundary(path, "depth", f"cap {depth_cap}")
-                continue
-            if self.budget.time_exhausted:
-                self.ledger.boundary(path, "time_exhausted", f"cap {self.budget.max_seconds}s")
-                self.ledger.swept(logical_root, deepest, count)
-                return
-            listing = self.list_dir(path)
-            if not listing.ok:
-                continue
-            deepest = max(deepest, depth)
-            prune = self._prune_reason(path, listing.value)
-            for entry in listing.value:
-                count += 1
-                yield entry
-                if prune:
+        # Fair share: one queue per top-level child of the root, served one
+        # directory per turn. A single enormous subtree can then spend only
+        # its own turns, and its siblings keep descending to the depth cap.
+        # Within a queue the order is still breadth-first, and listings are
+        # sorted, so the visit order is the same on every run.
+        queues: list[deque[tuple[str, int]]] = [deque([(logical_root, 0)])]
+
+        while queues:
+            for queue in tuple(queues):
+                if not queue:
                     continue
-                if entry.is_dir and not entry.is_symlink and entry.path not in seen:
-                    if descend is not None and not descend(entry.path):
+                path, depth = queue.popleft()
+                if depth > depth_cap:
+                    self.ledger.boundary(path, "depth", f"cap {depth_cap}")
+                    continue
+                if self.budget.time_exhausted:
+                    self.ledger.boundary(path, "time_exhausted", f"cap {self.budget.max_seconds}s")
+                    self.ledger.swept(logical_root, deepest, count)
+                    return
+                listing = self.list_dir(path)
+                if not listing.ok:
+                    continue
+                deepest = max(deepest, depth)
+                prune = self._prune_reason(path, listing.value)
+                for entry in listing.value:
+                    count += 1
+                    yield entry
+                    if prune:
                         continue
-                    seen.add(entry.path)
-                    frontier.append((entry.path, depth + 1))
+                    if entry.is_dir and not entry.is_symlink and entry.path not in seen:
+                        if descend is not None and not descend(entry.path):
+                            continue
+                        seen.add(entry.path)
+                        if depth == 0:
+                            queues.append(deque([(entry.path, 1)]))
+                        else:
+                            queue.append((entry.path, depth + 1))
+            queues = [q for q in queues if q]
 
         self.ledger.swept(logical_root, deepest, count)
 

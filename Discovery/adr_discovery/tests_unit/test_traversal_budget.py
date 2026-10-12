@@ -71,3 +71,18 @@ def test_fan_out_directory_yields_entries_but_not_subtrees(world):
     hits = _boundaries(gate, "fan_out")
     assert {b.path for b in hits} == {"/Users/alice/store"}
     assert all("61 children" in b.detail for b in hits)
+
+
+def test_one_huge_subtree_does_not_starve_a_deep_sibling(world):
+    for i in range(20):
+        for j in range(20):
+            for k in range(20):
+                world.file(f"/Users/alice/big/a{i:02d}/b{j:02d}/f{k:02d}", "x")
+    world.file("/Users/alice/small/a/b/c/d/.claude/settings.json", "{}")
+    gate = world.gate(budget=Budget(max_entries=300))
+
+    found = enumerate_candidates(gate)
+
+    assert _paths(found, "/small/a/b/c/d/.claude"), "the deep sibling must still be reached"
+    assert gate.budget.entries_used <= 300
+    assert _boundaries(gate, "budget_exhausted"), "the huge subtree is recorded as cut"
