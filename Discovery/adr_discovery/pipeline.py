@@ -107,7 +107,8 @@ def discover(
 
     # -- M6 ------------------------------------------------------------
     by_asset = _declarations_by_asset(assets, declarations)
-    assets, findings = judge(assets, by_asset, policy, ledger)
+    factors = {entry.id: entry.risk_factors for entry in catalog.entries if entry.risk_factors}
+    assets, findings = judge(assets, by_asset, policy, ledger, factors)
 
     # -- M7 ------------------------------------------------------------
     return Snapshot(

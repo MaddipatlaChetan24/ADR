@@ -9,6 +9,7 @@ rather than a guess dressed as a verdict.
 from __future__ import annotations
 
 from dataclasses import replace
+from typing import Mapping
 
 from ..contracts.records import Asset, Declaration, Finding, Kind, Risk
 from .findings import findings_for
@@ -25,14 +26,25 @@ LAUNCHING_KINDS = frozenset({Kind.MCP_SERVER, Kind.MCP_BUNDLE, Kind.HOOK, Kind.C
 
 
 def judge(assets: tuple[Asset, ...], declarations: dict[str, Declaration],
-          policy: Policy = EMPTY, ledger=None) -> tuple[tuple[Asset, ...], tuple[Finding, ...]]:
-    """Attach risk facts and sanction state, then raise what is worth raising."""
+          policy: Policy = EMPTY, ledger=None,
+          catalog_factors: Mapping[str, tuple[str, ...]] | None = None,
+          ) -> tuple[tuple[Asset, ...], tuple[Finding, ...]]:
+    """Attach risk facts and sanction state, then raise what is worth raising.
+
+    `catalog_factors` maps a catalog id to what the catalog says that tool
+    can do (executes_shell, local_inference, ...). It is reviewed data about
+    the tool, so it is added to every asset identified as that tool.
+    """
     judged: list[Asset] = []
     findings: list[Finding] = []
 
     for asset in assets:
         declaration = declarations.get(asset.asset_id)
         risk = _risk_for(asset, declaration, ledger)
+        known = (catalog_factors or {}).get(asset.catalog_id or "", ())
+        if known:
+            extra = tuple(f for f in known if f not in risk.factors)
+            risk = replace(risk, factors=risk.factors + extra)
         with_risk = replace(asset, risk=risk, sanction=state_for(asset, policy, declaration))
         judged.append(with_risk)
         findings.extend(findings_for(with_risk, policy))
