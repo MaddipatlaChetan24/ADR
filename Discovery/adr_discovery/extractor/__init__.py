@@ -9,6 +9,7 @@ is the count that was in the file.
 from __future__ import annotations
 
 import re
+from types import MappingProxyType
 
 from ..contracts.records import Candidate, Declaration, ExtractError, Extraction, Kind
 from ..redact import rules as redact
@@ -239,21 +240,48 @@ def _server(record: tuple[str, object], path: str, scope: str) -> Declaration:
     if not isinstance(body, dict):
         raise TypeError(f"server {name!r} must be a mapping, got {type(body).__name__}")
 
-    args = as_args(body.get("args"))
-    env = as_env(body.get("env"))
+    command, args = _launch_of(body)
+    env = as_env(body.get("env") if "env" in body else body.get("environment"))
     url = body.get("url")
+
+    raw: dict[str, object] = {"transport": _transport(body.get("type"), url)}
+    if body.get("enabled") is False or body.get("disabled") is True:
+        raw["flags"] = ("disabled",)
 
     return Declaration(
         kind=Kind.MCP_SERVER,
         name=str(name),
         path=path,
         scope=scope,
-        command=as_text(body["command"], "command") if "command" in body else None,
+        command=command,
         args=redact.scrub_argv(args),
         env_names=redact.env_names(env),
         url=redact.strip_url(as_text(url, "url")) if url is not None else None,
-        raw={"transport": body.get("type") or ("http" if url else "stdio")},
+        raw=raw,
     )
+
+
+def _launch_of(body: dict) -> tuple[str | None, tuple[str, ...]]:
+    """`command` is a string with separate `args`, or (opencode) one argv list."""
+    command = body.get("command")
+    if isinstance(command, (list, tuple)):
+        argv = as_args(command)
+        if not argv:
+            raise TypeError("command must not be an empty array")
+        return argv[0], argv[1:] + as_args(body.get("args"))
+    if command is None:
+        return None, as_args(body.get("args"))
+    return as_text(command, "command"), as_args(body.get("args"))
+
+
+#: opencode names its transports by locality; everything else by protocol.
+_TRANSPORT_ALIASES = MappingProxyType({"local": "stdio", "remote": "http"})
+
+
+def _transport(declared: object, url: object) -> object:
+    if not declared:
+        return "http" if url else "stdio"
+    return _TRANSPORT_ALIASES.get(declared, declared) if isinstance(declared, str) else declared
 
 
 def _scope_of(path: str) -> str:
