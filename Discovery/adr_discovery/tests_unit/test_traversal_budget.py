@@ -6,8 +6,10 @@ the budget numbers are the ones a live scan would produce.
 
 from __future__ import annotations
 
+from adr_discovery.contracts.records import Kind
 from adr_discovery.enumerator import enumerate_candidates
 from adr_discovery.enumerator.sweep import sweep
+from adr_discovery.pipeline import discover
 from adr_discovery.world.budget import Budget
 
 
@@ -145,9 +147,9 @@ def test_sweep_lists_each_directory_once(world):
     listed: list[str] = []
     real = gate.list_dir
 
-    def recording(path):
+    def recording(path, **kw):
         listed.append(path)
-        return real(path)
+        return real(path, **kw)
 
     gate.list_dir = recording
 
@@ -158,3 +160,34 @@ def test_sweep_lists_each_directory_once(world):
     for path in ("/Users/alice", "/Users/alice/src", "/Users/alice/.claude/skills"):
         assert walked.count(path) == 1, path
     assert len(walked) == len(set(walked))
+
+
+def test_surfaces_are_still_read_after_the_sweep_spends_its_share(world, catalog):
+    for i in range(60):
+        for j in range(40):
+            world.file(f"/Users/alice/big/d{i:02d}/f{j:02d}", "x")
+    world.file(
+        "/Users/alice/.claude/skills/s/SKILL.md",
+        "---\nname: s\ndescription: a skill\n---\nbody\n",
+    )
+    world.file("/Users/alice/.claude/commands/c.md", "---\ndescription: a command\n---\nbody\n")
+    gate = world.gate(budget=Budget(max_entries=1500))
+
+    snapshot = discover(gate, catalog)
+
+    kinds = {a.kind for a in snapshot.assets}
+    assert Kind.SKILL in kinds and Kind.COMMAND in kinds
+    assert gate.budget.entries_used <= 1500
+
+
+def test_retained_listing_is_not_charged_twice(world):
+    for i in range(10):
+        world.file(f"/Users/alice/.claude/skills/s{i}/SKILL.md", "x")
+    gate = world.gate()
+
+    list(gate.walk("/Users/alice", retain=lambda p: p.endswith("/skills")))
+    used = gate.budget.entries_used
+    again = gate.list_dir("/Users/alice/.claude/skills")
+
+    assert again.ok and len(again.value) == 10
+    assert gate.budget.entries_used == used

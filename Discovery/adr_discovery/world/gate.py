@@ -33,6 +33,7 @@ from .platform.base import Providers
 T = TypeVar("T")
 #: First line of a valid CACHEDIR.TAG (https://bford.info/cachedir/).
 _CACHEDIR_SIGNATURE = b"Signature: 8a477f597d28d172789f06886806bc55"
+_MAX_RETAINED = 5000
 _HELPER_PATH = "/usr/bin:/bin:/usr/sbin:/sbin"
 
 
@@ -110,6 +111,11 @@ class Gate:
         #: validation and before open(), so a case can swap the target and
         #: prove the descriptor check catches it.
         self.on_validated = None
+        #: Complete listings of directories a walk marked worth keeping, so a
+        #: later stage reading the same surface directory is not charged
+        #: twice. Only validated, untruncated listings are stored, and the
+        #: number kept is bounded.
+        self._retained: dict[str, tuple[Entry, ...]] = {}
 
     # ---------------------------------------------------------------- paths
 
@@ -259,7 +265,10 @@ class Gate:
             )
         )
 
-    def list_dir(self, logical: str) -> Result[tuple[Entry, ...]]:
+    def list_dir(self, logical: str, retain: bool = False) -> Result[tuple[Entry, ...]]:
+        kept = self._retained.get(logical)
+        if kept is not None:
+            return Ok(kept)
         validated = self._validate(logical)
         if not validated.ok:
             return validated
@@ -305,6 +314,8 @@ class Gate:
                 logical, "budget_exhausted", f"cap {self.budget.entry_cap}; directory truncated"
             )
         entries.sort(key=lambda entry: entry.path)
+        if retain and not exhausted and len(self._retained) < _MAX_RETAINED:
+            self._retained[logical] = tuple(entries)
         return Ok(tuple(entries))
 
     def walk(
@@ -313,6 +324,7 @@ class Gate:
         max_depth: int | None = None,
         descend: Callable[[str], bool] | None = None,
         seen: set[str] | None = None,
+        retain: Callable[[str], bool] | None = None,
     ) -> Iterator[Entry]:
         """Breadth-first under the shared entry ceiling.
 
@@ -326,6 +338,9 @@ class Gate:
         walks and a directory reachable from more than one root (`/home` and
         `/home/alice`, a code root inside a home) is listed, and charged,
         once; the later walk steps over it and still yields the entry.
+
+        `retain` marks directories whose listing later stages will want
+        again; those listings are kept and re-served without a charge.
 
         Breadth-first on purpose: a budget exhausted late still covered the
         likely places, which is not true of a depth-first walk that spends
@@ -360,7 +375,7 @@ class Gate:
                     self.ledger.boundary(path, "time_exhausted", f"cap {self.budget.max_seconds}s")
                     self.ledger.swept(logical_root, deepest, count)
                     return
-                listing = self.list_dir(path)
+                listing = self.list_dir(path, retain=retain is not None and retain(path))
                 if not listing.ok:
                     continue
                 # Marked when listed, not when queued: a directory a capped

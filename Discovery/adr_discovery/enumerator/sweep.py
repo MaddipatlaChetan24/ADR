@@ -28,8 +28,12 @@ def sweep(gate, include_dependency_caches: bool = False) -> tuple[Candidate, ...
     def descend(path: str) -> bool:
         return in_scope(path, include_dependency_caches)
 
+    def retain(path: str) -> bool:
+        # Surface directories are listed again by extraction; keep the answer.
+        return marker_kind(path.rsplit("/", 1)[-1]) == "marker_dir"
+
     def scan(root: str, priority: Priority) -> None:
-        for entry in gate.walk(root, descend=descend, seen=visited):
+        for entry in gate.walk(root, descend=descend, seen=visited, retain=retain):
             if not in_scope(entry.path, include_dependency_caches):
                 continue
             name = entry.path.rsplit("/", 1)[-1]

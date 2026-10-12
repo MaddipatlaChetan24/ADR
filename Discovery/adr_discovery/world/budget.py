@@ -30,8 +30,10 @@ class Budget:
     #: with no ceiling behind it is a hope.
     max_seconds: float = 120.0
     #: Entries the generic sweep leaves untouched for stages that list
-    #: directories after it. Zero keeps the whole ceiling for the sweep.
-    reserved_walk_entries: int = 0
+    #: directories after it (extraction, manifest reads, app-state
+    #: listings). Left unset it is 10% of `max_entries`; pass 0 to give the
+    #: whole ceiling to the sweep.
+    reserved_walk_entries: int | None = None
     #: Most of the ceiling the known agent state roots may claim, walked
     #: before the generic sweep. A cap, not a reservation: what they do not
     #: use stays available to everything after them.
@@ -40,6 +42,10 @@ class Budget:
     entries_used: int = field(default=0, init=False)
     _ceiling: int | None = field(default=None, init=False, repr=False)
     started: float = field(default_factory=time.monotonic, init=False)
+
+    def __post_init__(self) -> None:
+        if self.reserved_walk_entries is None:
+            self.reserved_walk_entries = self.max_entries // 10
 
     @property
     def entry_cap(self) -> int:
