@@ -474,21 +474,36 @@ class ClaudeDesktopParser(BaseParser):
 
             tool_results = []
             if isinstance(content, list):
-                for item in content:
-                    if isinstance(item, dict) and item.get("type") == "tool_result":
-                        result_content = item.get("content", "")
+                tool_result_items = [
+                    item for item in content if isinstance(item, dict) and item.get("type") == "tool_result"
+                ]
+                # Only apply the single root-level tool_use_result override when
+                # there's exactly one tool_result block. With more than one (e.g.
+                # parallel tool calls), applying one shared override to every
+                # block would incorrectly overwrite each block's own distinct
+                # content with the same value.
+                tool_use_result = obj.get("tool_use_result")
+                apply_override = isinstance(tool_use_result, dict) and len(tool_result_items) == 1
 
-                        # The root-level tool_use_result carries the richer payload.
-                        if isinstance(obj.get("tool_use_result"), dict):
-                            result_content = obj["tool_use_result"].get("result", result_content)
+                for item in tool_result_items:
+                    result_content = item.get("content", "")
 
-                        result_content = self._normalize_result_content(result_content)
-                        if result_content:
-                            result_content = truncate_middle(result_content, max_length=1000, edge_chars=400)
+                    # The root-level tool_use_result carries the richer payload.
+                    if apply_override:
+                        # Only override with a non-empty result - an explicitly
+                        # falsy tool_use_result["result"] (e.g. "" or None) should
+                        # not discard real content already present on the block.
+                        override = tool_use_result.get("result")
+                        if override:
+                            result_content = override
 
-                        tool_results.append(
-                            {"tool_use_id": item.get("tool_use_id"), "result": result_content}
-                        )
+                    result_content = self._normalize_result_content(result_content)
+                    if result_content:
+                        result_content = truncate_middle(result_content, max_length=1000, edge_chars=400)
+
+                    tool_results.append(
+                        {"tool_use_id": item.get("tool_use_id"), "result": result_content}
+                    )
 
             if tool_results:
                 extracted["tool_results"] = tool_results
