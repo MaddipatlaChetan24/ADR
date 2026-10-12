@@ -189,7 +189,14 @@ kind          cli_agent · app · ai_browser · model_runtime · model_weights
               extension · mcp_server · mcp_bundle · skill · command
               plugin · output_style · agent_definition · hook · instructions
               ci_agent · cloud_agent · agent_platform
-identity      catalog id, or a content-derived identity for the uncatalogued
+identity      catalog id, or a content-derived identity for the uncatalogued.
+              Declarations are never identified by name alone: file-shaped
+              kinds (instructions, skill, command, agent_definition,
+              output_style, plugin) by their on-disk path, mcp_server by
+              name plus the declaring config file, hooks and CI agents by
+              path plus their own digest. Two CLAUDE.md files, two skills
+              named `index`, or one server name declared in two configs
+              are separate assets.
               name · vendor · version · install_path · install_root · install_method
 owner         a person, or "system" — never whoever ran the scan
 location      local today; the schema reserves wsl:<distro> · container · remote:<host>
@@ -201,6 +208,8 @@ last_used     from Sensor session telemetry
 risk          {pinned, factors[], credential_kinds[], env_names[], …}
 hook_event    hooks only: lifecycle event (hook_matcher: tool matcher); the command is never emitted
 ```
+
+Schema 1.1 changed identity for declarations (see `identity`), so `asset_id` of those kinds differs from 1.0 and the first delta across the upgrade reports them as disappeared and appeared. Catalogued binaries and processes are unaffected.
 
 `evidence` makes every claim checkable, and `verification` says which rung of the ladder established identity — so a reader can tell a package-owned binary from a filename that looked right. Discovered executables are never run. OS inventory helpers use fixed absolute paths through a separate bounded-output interface; they cannot be selected through the scanner's inherited `PATH`.
 

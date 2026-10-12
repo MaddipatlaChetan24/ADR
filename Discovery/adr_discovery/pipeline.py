@@ -203,7 +203,7 @@ def _observation_from_declaration(candidate: Candidate, declaration: Declaration
     version = declaration.raw.get("version")
     return Observation(
         kind=declaration.kind,
-        identity=str(declaration.raw.get("identity") or f"{declaration.kind.value}:{declaration.name}"),
+        identity=declaration_identity(declaration),
         path=declaration.path,
         install_root=_root_of(declaration.path),
         version=version if isinstance(version, str) else None,
@@ -240,9 +240,47 @@ def _mark_undeclared(assets: tuple[Asset, ...], declarations) -> tuple[Asset, ..
     return tuple(out)
 
 
+#: Declarations that are a file or directory on disk: the path is the thing.
+FILE_SHAPED_KINDS = frozenset({
+    Kind.INSTRUCTIONS, Kind.SKILL, Kind.COMMAND, Kind.AGENT_DEFINITION,
+    Kind.OUTPUT_STYLE, Kind.PLUGIN,
+})
+
+
+def declaration_identity(declaration: Declaration) -> str:
+    """What makes one declaration this declaration and not another.
+
+    Never the name alone: every CLAUDE.md is called CLAUDE.md, many skills
+    are called `index`, and one MCP server name is routinely declared in
+    several configs, each with its own launch spec.
+
+    - an extractor-supplied `raw["identity"]` wins (hooks, CI agents);
+    - file-shaped kinds are identified by their path (skill dir, file, plugin dir);
+    - everything else (MCP servers, bundles, ...) by name and declaring file.
+
+    Version, env values and other volatile data never enter the identity.
+    """
+    explicit = declaration.raw.get("identity")
+    if explicit:
+        return str(explicit)
+    if declaration.kind in FILE_SHAPED_KINDS:
+        return f"{declaration.kind.value}:{declaration.path}"
+    return f"{declaration.kind.value}:{declaration.name}@{declaration.path}"
+
+
 def _declarations_by_asset(assets: tuple[Asset, ...], declarations) -> dict[str, Declaration]:
-    by_name = {d.name: d for _, d in declarations}
-    return {a.asset_id: by_name[a.name] for a in assets if a.name in by_name}
+    """Declaration for each asset, looked up by identity and never by name."""
+    by_identity: dict[tuple[str, str], Declaration] = {}
+    for _, declaration in declarations:
+        by_identity.setdefault(
+            (declaration.kind.value, declaration_identity(declaration)), declaration
+        )
+    out: dict[str, Declaration] = {}
+    for asset in assets:
+        found = by_identity.get((asset.kind.value, asset.identity))
+        if found is not None:
+            out[asset.asset_id] = found
+    return out
 
 
 def _is_file(stat) -> bool:

@@ -11,7 +11,7 @@ from dataclasses import dataclass, field
 
 from .records import Asset, Finding, ReviewItem
 
-SCHEMA_VERSION = "1.0"
+SCHEMA_VERSION = "1.1"
 
 #: Categories discovery deliberately does not collect. Named rather than
 #: omitted, so a reader can tell a clean machine from an unasked question.

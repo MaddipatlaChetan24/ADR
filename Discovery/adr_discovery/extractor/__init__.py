@@ -263,16 +263,32 @@ def _shell_profile(gate, path: str) -> Extraction:
 def _workflow(document: dict, path: str) -> Extraction:
     """An agent arranged to run with no person present."""
     steps = list(agent_steps(document))
+    # Identity is workflow file + job + action + step label, with an ordinal
+    # only when two steps are otherwise indistinguishable.
+    seen: dict[tuple[str, str, str], int] = {}
+    ordinals: list[int] = []
+    for job_name, step, reference, _ in steps:
+        key = (job_name, reference, _step_label(step))
+        ordinals.append(seen.get(key, 0))
+        seen[key] = seen.get(key, 0) + 1
     return per_record(
         steps,
-        lambda index, record: _ci_agent(record, path),
+        lambda index, record: _ci_agent(record, path, ordinals[index]),
         path,
         cap=RECORD_CAP,
     )
 
 
-def _ci_agent(record, path: str) -> Declaration:
+def _step_label(step: dict) -> str:
+    label = step.get("id") or step.get("name") or ""
+    return hashlib.sha256(str(label).encode("utf-8")).hexdigest()[:8] if label else ""
+
+
+def _ci_agent(record, path: str, ordinal: int = 0) -> Declaration:
     job_name, step, reference, catalog_id = record
+    identity = f"ci_agent:{path}:{job_name}:{reference}:{_step_label(step)}"
+    if ordinal:
+        identity += f"#{ordinal}"
     return Declaration(
         kind=Kind.CI_AGENT,
         name=f"{reference} ({job_name})",
@@ -281,7 +297,7 @@ def _ci_agent(record, path: str) -> Declaration:
         command=reference,
         env_names=env_names_of(step),
         raw={"catalog_id": catalog_id, "job": job_name, "unattended": True,
-             "transport": "ci"},
+             "transport": "ci", "identity": identity},
     )
 
 
