@@ -3,7 +3,6 @@
     content hash          same bytes, wherever they sit
   > real path / inode     same file, reached by any number of links
   > package identity      same package record
-  > signature identity    same publisher and product
   > catalog + owner + normalized install root
 
 The first line is the addition. Ollama was counted twice because the
@@ -51,8 +50,6 @@ def keys_for(obs: Observation) -> tuple[tuple[str, str], ...]:
         out.append(("inode", obs.inode))
     if obs.package_id:
         out.append(("package", obs.package_id))
-    if obs.signature_id:
-        out.append(("signature", obs.signature_id))
     if obs.catalog_id and not _is_declared(obs):
         root = normalize_root(obs.install_root) or ""
         out.append(("catalog", f"{obs.catalog_id}|{obs.owner or 'system'}|{root}"))

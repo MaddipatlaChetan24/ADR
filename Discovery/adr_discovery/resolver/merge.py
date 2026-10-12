@@ -56,7 +56,7 @@ def group(observations: tuple[Observation, ...]) -> tuple[tuple[int, ...], ...]:
             by_kind.setdefault(kind, {}).setdefault(value, []).append(i)
 
     refused = 0
-    for kind in ("content", "realpath", "inode", "package", "signature",
+    for kind in ("content", "realpath", "inode", "package",
                  "install", "catalog", "identity"):
         for members in by_kind.get(kind, {}).values():
             anchor = members[0]

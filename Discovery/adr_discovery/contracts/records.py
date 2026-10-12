@@ -164,7 +164,6 @@ class Observation:
     real_path: str | None = None
     inode: str | None = None
     package_id: str | None = None
-    signature_id: str | None = None
     #: Last modification of the observed file, ISO-8601 UTC.
     modified: str | None = None
     liveness: Liveness = Liveness.INSTALLED
