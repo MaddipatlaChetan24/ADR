@@ -25,7 +25,10 @@ def sweep(gate, include_dependency_caches: bool = False) -> tuple[Candidate, ...
         if gate.budget.entries_exhausted:
             gate.ledger.boundary(root, "budget_exhausted", "root not swept")
             continue
-        for entry in gate.walk(root):
+        def descend(path: str) -> bool:
+            return in_scope(path, include_dependency_caches)
+
+        for entry in gate.walk(root, descend=descend):
             if not in_scope(entry.path, include_dependency_caches):
                 continue
             name = entry.path.rsplit("/", 1)[-1]

@@ -23,7 +23,7 @@ import threading
 import time
 from collections import deque
 from dataclasses import dataclass
-from typing import Generic, Iterator, TypeVar
+from typing import Callable, Generic, Iterator, TypeVar
 
 from ..coverage.ledger import Ledger
 from ..redact import rules as redact
@@ -305,8 +305,19 @@ class Gate:
         entries.sort(key=lambda entry: entry.path)
         return Ok(tuple(entries))
 
-    def walk(self, logical_root: str, max_depth: int | None = None) -> Iterator[Entry]:
+    def walk(
+        self,
+        logical_root: str,
+        max_depth: int | None = None,
+        descend: Callable[[str], bool] | None = None,
+    ) -> Iterator[Entry]:
         """Breadth-first under the shared entry ceiling.
+
+        `descend` is asked before a directory joins the frontier, so a tree
+        the caller does not want is never listed and never charged. The
+        directory's own entry is still yielded: the caller filters results,
+        this decides cost. Routine skips leave no ledger record -- a
+        dependency cache is policy, not a gap in what was seen.
 
         Breadth-first on purpose: a budget exhausted late still covered the
         likely places, which is not true of a depth-first walk that spends
@@ -335,6 +346,8 @@ class Gate:
                 count += 1
                 yield entry
                 if entry.is_dir and not entry.is_symlink and entry.path not in seen:
+                    if descend is not None and not descend(entry.path):
+                        continue
                     seen.add(entry.path)
                     frontier.append((entry.path, depth + 1))
 
