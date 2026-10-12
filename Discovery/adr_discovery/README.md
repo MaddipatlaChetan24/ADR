@@ -27,7 +27,6 @@ The rewrite exists because the old layout had no boundary a linter could check. 
 - WSL, containers, remote/cloud agents, scheduled agents, account identity and code-signature collection are not implemented.
 - Fleet aggregation, fan-out and trend tracking belong to the central plane and are not part of this endpoint package.
 - The black-box harness is operational for a subset of the manifest. Vendor applications, authenticated sessions, services and model-weight scenarios still need additional install recipes and golden guests.
-- `coverage.out_of_scope` still names instruction files and hooks even though the collector now inventories them. The snapshot vocabulary must be corrected before treating that field as authoritative.
 
 ### Run it
 

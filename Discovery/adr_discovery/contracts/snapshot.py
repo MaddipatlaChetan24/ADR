@@ -16,8 +16,6 @@ SCHEMA_VERSION = "1.1"
 #: Categories discovery deliberately does not collect. Named rather than
 #: omitted, so a reader can tell a clean machine from an unasked question.
 OUT_OF_SCOPE: tuple[str, ...] = (
-    "instruction_files",
-    "agent_hooks",
     "scheduling_mechanisms",
 )
 
