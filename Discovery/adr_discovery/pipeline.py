@@ -207,9 +207,13 @@ def _observation_from_declaration(candidate: Candidate, declaration: Declaration
     if declaration.kind is not Kind.MCP_SERVER:
         detail["install_method"] = "agent_artifact"
     version = declaration.raw.get("version")
+    catalog_id = declaration.raw.get("catalog_id")
     return Observation(
         kind=declaration.kind,
         identity=declaration_identity(declaration),
+        # CI agents name the catalogued tool they run; carrying it lets them
+        # be judged and sanctioned. It never decides the asset's identity.
+        catalog_id=catalog_id if isinstance(catalog_id, str) and catalog_id else None,
         path=declaration.path,
         install_root=_root_of(declaration.path),
         version=version if isinstance(version, str) else None,

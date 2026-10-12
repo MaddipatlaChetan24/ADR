@@ -84,7 +84,8 @@ def findings_for(asset: Asset, policy: Policy) -> tuple[Finding, ...]:
             )
         )
 
-    if asset.risk.unattended:
+    # A CI agent is unattended by construction; it is not a bypass flag.
+    if asset.risk.unattended and asset.kind is not Kind.CI_AGENT:
         out.append(
             Finding(
                 rule="unattended_execution",

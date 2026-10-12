@@ -47,7 +47,12 @@ def resolve(observations: tuple[Observation, ...], telemetry: dict[str, str] | N
 
         rungs = tuple(sorted({e.rung for e in evidence if e.rung is not None},
                              key=lambda r: r.value))
-        last_used = (telemetry or {}).get(primary.catalog_id or identity)
+        # Session telemetry describes the local install, not a declaration
+        # that merely names the same tool.
+        last_used = (
+            None if primary.detail.get("declared")
+            else (telemetry or {}).get(primary.catalog_id or identity)
+        )
 
         assets.append(
             Asset(

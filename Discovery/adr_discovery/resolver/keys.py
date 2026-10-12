@@ -53,7 +53,7 @@ def keys_for(obs: Observation) -> tuple[tuple[str, str], ...]:
         out.append(("package", obs.package_id))
     if obs.signature_id:
         out.append(("signature", obs.signature_id))
-    if obs.catalog_id:
+    if obs.catalog_id and not _is_declared(obs):
         root = normalize_root(obs.install_root) or ""
         out.append(("catalog", f"{obs.catalog_id}|{obs.owner or 'system'}|{root}"))
     else:
@@ -78,7 +78,16 @@ def identity_of(obs: Observation) -> str:
     Two observations that name different tools may never merge, however
     many weak keys they happen to share.
     """
+    if _is_declared(obs):
+        return obs.identity
     return obs.catalog_id or obs.identity
+
+
+def _is_declared(obs: Observation) -> bool:
+    """A declaration is one record in one place. It may *name* a catalogued
+    tool (a CI step running a catalogued action) without being the install
+    of that tool, so the catalog id must not merge or rename it."""
+    return bool(obs.detail.get("declared"))
 
 
 def asset_id(kind: str, identity: str, owner: str, install_root: str | None) -> str:
