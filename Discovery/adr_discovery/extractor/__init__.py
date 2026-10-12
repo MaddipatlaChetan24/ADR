@@ -104,6 +104,9 @@ def extract(gate, candidate: Candidate) -> Extraction:
     if fmt == "workflow":
         return _workflow(document, candidate.path)
 
+    if candidate.path.endswith("/.mcpb/manifest.json"):
+        return _mcpb(document, candidate.path, scope)
+
     servers = _server_block(document)
     chunks: list[Extraction] = []
     if servers:
@@ -137,6 +140,50 @@ def extract(gate, candidate: Candidate) -> Extraction:
     if result.truncated:
         gate.ledger.truncate(candidate.path, len(result.declarations), result.declared)
     return result
+
+
+def _mcpb(document: dict, path: str, scope: str) -> Extraction:
+    """An MCP bundle manifest: one bundle, one launch spec.
+
+    The manifest names the bundle and says how its server starts under
+    `server.mcp_config`. Only name, version and the launch shape are read;
+    description, author and tool prose are not.
+    """
+    fallback = path.rstrip("/").rsplit("/", 2)[-2]
+    server = document.get("server")
+    if not isinstance(server, dict):
+        return Extraction(
+            declarations=(Declaration(
+                kind=Kind.MCP_BUNDLE, name=fallback, path=path, scope=scope,
+                raw={"flags": ("malformed",), "surface": Kind.MCP_BUNDLE.value},
+            ),),
+            errors=(ExtractError(path, None, "manifest has no server mapping"),),
+            declared=1,
+        )
+
+    def build(index: int, record: object) -> Declaration:
+        config = server.get("mcp_config")
+        config = config if isinstance(config, dict) else {}
+        command, args = _launch_of(config)
+        name = document.get("name")
+        version = document.get("version")
+        raw: dict[str, object] = {"surface": Kind.MCP_BUNDLE.value, "transport": "stdio"}
+        if isinstance(version, (str, int, float)) and not isinstance(version, bool):
+            raw["version"] = str(version)
+        if isinstance(server.get("type"), str):
+            raw["bundle_runtime"] = server["type"]
+        return Declaration(
+            kind=Kind.MCP_BUNDLE,
+            name=name if isinstance(name, str) and name else fallback,
+            path=path,
+            scope=scope,
+            command=command,
+            args=redact.scrub_argv(args),
+            env_names=redact.env_names(as_env(config.get("env"))),
+            raw=raw,
+        )
+
+    return per_record([document], build, path)
 
 
 def _hook_records(document: dict):

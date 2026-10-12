@@ -174,11 +174,13 @@ def _observation_from_declaration(candidate: Candidate, declaration: Declaration
     detail.update(declaration.raw)
     if declaration.kind is not Kind.MCP_SERVER:
         detail["install_method"] = "agent_artifact"
+    version = declaration.raw.get("version")
     return Observation(
         kind=declaration.kind,
         identity=f"{declaration.kind.value}:{declaration.name}",
         path=declaration.path,
         install_root=_root_of(declaration.path),
+        version=version if isinstance(version, str) else None,
         liveness=Liveness.DECLARED_ONLY,
         evidence=(
             Evidence("extractor", Channel.CONFIG, declaration.path,
