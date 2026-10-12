@@ -238,14 +238,12 @@ def credential_reach(env_names: tuple[str, ...], env_declared: bool) -> tuple[tu
 
 def unattended(argv: tuple[str, ...]) -> bool:
     """The flag comes from the agent's own launch, never from the scheduler
-    that started it: `-p` with `--dangerously-skip-permissions` is the
-    finding whether cron, a timer or a person typed it."""
+    that started it: `--dangerously-skip-permissions` is the finding whether
+    cron, a timer or a person typed it. Headless mode alone (`-p`) is not."""
     flags = set(argv)
-    headless = bool(flags & {"-p", "--print", "--headless", "--non-interactive", "--yes", "-y"})
-    bypass = bool(
+    return bool(
         flags & {"--dangerously-skip-permissions", "--yolo", "--auto-approve", "--no-confirm"}
     )
-    return headless and bypass or bypass
 
 
 def transport_of(declaration_raw: dict, url: str | None) -> tuple[str | None, tuple[str, ...]]:

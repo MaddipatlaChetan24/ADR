@@ -146,7 +146,6 @@ adr_discovery/
 │
 ├── identifier/           M4 · what it really is
 │   ├── ladder.py           provenance → content → convention, stop at proof
-│   ├── verify.py           compatibility refusal for executable probes
 │   └── openworld.py        score the uncatalogued on properties, never on names
 │
 ├── resolver/             M5 · one thing, one asset

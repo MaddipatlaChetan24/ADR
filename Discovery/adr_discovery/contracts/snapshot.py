@@ -20,15 +20,6 @@ OUT_OF_SCOPE: tuple[str, ...] = (
 )
 
 
-class Boundary(str):
-    """Why a walk or a read stopped."""
-
-    DEPTH = "depth"
-    ENTRY_CAP = "entry_cap"
-    BUDGET = "budget_exhausted"
-    TIME = "time_exhausted"
-
-
 @dataclass(frozen=True, slots=True)
 class RootSwept:
     path: str

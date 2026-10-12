@@ -25,7 +25,7 @@ def _may_be_judged(asset: Asset) -> bool:
     if asset.kind is Kind.MCP_SERVER:
         # Declared in a config, or correlated with one. A bare process whose
         # argv merely resembles a server does not reach this branch.
-        return bool(asset.catalog_id) or "declared" in asset.flags or asset.confidence.label != "none"
+        return bool(asset.catalog_id) or asset.confidence.label != "none"
     return bool(asset.catalog_id)
 
 

@@ -68,8 +68,3 @@ def group(observations: tuple[Observation, ...]) -> tuple[tuple[int, ...], ...]:
     for i in range(len(observations)):
         buckets.setdefault(groups.find(i), []).append(i)
     return tuple(tuple(v) for v in buckets.values()), refused
-
-
-def group_only(observations: tuple[Observation, ...]) -> tuple[tuple[int, ...], ...]:
-    grouped, _ = group(observations)
-    return grouped

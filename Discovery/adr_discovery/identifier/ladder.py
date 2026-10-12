@@ -25,33 +25,6 @@ from .openworld import score, signals_for
 
 MAX_HASH_BYTES = 8 * 1024 * 1024
 
-#: Executable formats, by magic. This is descriptive metadata only; format
-#: is not evidence that a file belongs to a particular catalog entry.
-_MAGIC: tuple[tuple[bytes, str], ...] = (
-    (b"\x7fELF", "elf"),
-    (b"\xcf\xfa\xed\xfe", "mach-o"),
-    (b"\xce\xfa\xed\xfe", "mach-o"),
-    (b"\xca\xfe\xba\xbe", "mach-o-universal"),
-    (b"MZ", "pe"),
-    (b"#!", "script"),
-)
-
-
-def binary_format(gate, path: str) -> str | None:
-    """What kind of executable this is, from its first bytes.
-
-    Format is metadata, not identity: any attacker can create a file with
-    the right magic bytes.
-    """
-    raw = gate.read_bytes(path, limit=64)
-    if not raw.ok or not raw.value:
-        return None
-    for magic, name in _MAGIC:
-        if raw.value.startswith(magic):
-            return name
-    return None
-
-
 def content_hash(gate, path: str, limit: int = MAX_HASH_BYTES) -> str | None:
     """One size-capped read. Returns None when the target is not a file we
     are allowed, or able, to read -- never a hash of partial bytes."""
