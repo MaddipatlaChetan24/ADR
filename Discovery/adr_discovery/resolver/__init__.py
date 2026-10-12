@@ -39,7 +39,9 @@ def resolve(observations: tuple[Observation, ...], telemetry: dict[str, str] | N
         rows = [observations[i] for i in members]
         primary = _primary(rows)
 
-        evidence = tuple(e for row in rows for e in row.evidence)
+        # Two candidates for one fact (a launcher reached from two sources)
+        # yield the same entry twice; it is one observation, listed once.
+        evidence = tuple(dict.fromkeys(e for row in rows for e in row.evidence))
         liveness = max((r.liveness for r in rows), key=_LIVENESS_RANK.__getitem__)
         install_root = next((r.install_root for r in rows if r.install_root), None)
         identity = identity_of(primary)
