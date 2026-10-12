@@ -62,7 +62,7 @@ def resolve(observations: tuple[Observation, ...], telemetry: dict[str, str] | N
                 identity=identity,
                 catalog_id=primary.catalog_id,
                 vendor=primary.detail.get("vendor"),
-                version=next((r.version for r in rows if r.version), None),
+                version=_version(rows),
                 install_path=primary.path,
                 install_root=install_root,
                 install_method=primary.detail.get("install_method"),
@@ -138,6 +138,16 @@ def _primary(rows: list[Observation]) -> Observation:
     real = [r for r in rows if not r.attribute_of]
     pool = real or rows
     return max(pool, key=lambda r: (bool(r.catalog_id), bool(r.content_hash), bool(r.path)))
+
+
+def _version(rows: list[Observation]) -> str | None:
+    """The installed version, ahead of whichever process happened to be listed.
+
+    A process still running the previous release after an update is common;
+    the install's version is what the next launch runs.
+    """
+    installed = (r.version for r in rows if r.version and r.liveness is not Liveness.RUNNING)
+    return next(installed, None) or next((r.version for r in rows if r.version), None)
 
 
 def _hook_field(primary: Observation, key: str) -> str | None:

@@ -214,6 +214,8 @@ Schema 1.1 changed identity for declarations (see `identity`), so `asset_id` of 
 
 `evidence` makes every claim checkable, and `verification` says which rung of the ladder established identity — so a reader can tell a package-owned binary from a filename that looked right. Discovered executables are never run. OS inventory helpers use fixed absolute paths through a separate bounded-output interface; they cannot be selected through the scanner's inherited `PATH`.
 
+A native installer leaves no package record, so a catalog entry may declare `install_layouts`: the directory its updater manages (`~/.local/share/claude/versions/*` for Claude Code). An executable there, a launcher symlink resolved into it, or a process running one is concluded at the provenance rung, with the version read from the path when it has the entry's `version_shape`.
+
 ### Coverage travels with it
 
 Carried in the snapshot beside the assets, not in a log:

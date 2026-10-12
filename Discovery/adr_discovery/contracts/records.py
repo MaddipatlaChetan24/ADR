@@ -133,6 +133,9 @@ class Verdict:
     signals: tuple[str, ...] = ()
     score: float = 0.0
     conflict: str | None = None
+    #: The directory an installer manages, when that is what proved identity:
+    #: every version in it, and every process running one, is one install.
+    install_root: str | None = None
 
     @property
     def is_concluded(self) -> bool:

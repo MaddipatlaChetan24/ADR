@@ -176,12 +176,17 @@ def _observation_from(gate, candidate: Candidate, verdict) -> Observation:
         host = str(candidate.detail.get("remote_host") or candidate.path)
         evidence += (Evidence("enumerator", Channel.NETWORK, candidate.path,
                               f"connected to model provider {host}", 0.75),)
+    owner = candidate.detail.get("user")
+    if verdict.install_root and not owner and stat.ok:
+        # An installer-managed install belongs to whoever owns its files, so
+        # the launcher link and a process running a release agree on it.
+        owner = stat.value.owner
     return Observation(
         kind=verdict.kind,
         identity=verdict.catalog_id or candidate.path,
         path=candidate.path,
-        install_root=_root_of(candidate.path),
-        owner=str(candidate.detail.get("user") or "system"),
+        install_root=verdict.install_root or _root_of(candidate.path),
+        owner=str(owner or "system"),
         version=verdict.version,
         catalog_id=verdict.catalog_id,
         package_id=_package_id(candidate),
