@@ -8,11 +8,9 @@ program without going through a command line.
 from __future__ import annotations
 
 import argparse
-import getpass
 import json
 import os
 import platform
-import socket
 import sys
 import unicodedata
 from datetime import datetime, timezone
@@ -25,6 +23,7 @@ from .pipeline import discover
 from .redact import rules as redact
 from .reporter import diff, from_dict, stats, to_json
 from .reporter.delta import DifferentEndpoints
+from .world import host_identity
 from .world.budget import Budget
 from .world.gate import Gate
 from .world.platform import for_host
@@ -101,8 +100,10 @@ def main(argv: list[str] | None = None) -> int:
 
     snapshot = discover(
         gate, catalog, policy, telemetry,
-        hostname=socket.gethostname(),
-        username=getpass.getuser(),
+        # From the operating system, not USER/LOGNAME, and the same value
+        # the Sensor reports for this host (Common/adr_common).
+        hostname=host_identity.hostname(),
+        username=host_identity.username(),
         platform_name=platform.system().lower(),
         timestamp=datetime.now(timezone.utc).isoformat(timespec="seconds"),
     )
