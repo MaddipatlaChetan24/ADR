@@ -101,7 +101,13 @@ def loads(text: str) -> Catalog:
 
         for kind in INDEXED_KINDS:
             source = entry.proofs if kind in UNIQUE_PROOFS else entry.fingerprints
-            for value in source.get(kind, ()) or ():
+            values = list(source.get(kind, ()) or ())
+            if kind == "packages":
+                # `proofs.provenance` entries are "<manager>:<package>" records
+                # (e.g. brew:claude): the same identity as a package fingerprint,
+                # and held to the same ambiguity rule.
+                values += list(entry.provenance)
+            for value in values:
                 key = str(value).lower()
                 owner = index[kind].get(key)
                 if owner is not None and owner != entry.id:
