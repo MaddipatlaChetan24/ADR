@@ -114,6 +114,7 @@ def _asset(row: dict) -> Asset:
         skill_sha256=row.get("skill_sha256"),
         content_hash=row.get("content_hash"),
         package_id=row.get("package_id"),
+        modified=row.get("modified"),
     )
 
 

@@ -165,6 +165,8 @@ class Observation:
     inode: str | None = None
     package_id: str | None = None
     signature_id: str | None = None
+    #: Last modification of the observed file, ISO-8601 UTC.
+    modified: str | None = None
     liveness: Liveness = Liveness.INSTALLED
     attribute_of: str | None = None
     evidence: tuple[Evidence, ...] = ()
@@ -216,6 +218,9 @@ class Asset:
     content_hash: str | None = None
     #: "<manager>:<package>" when a package record owns the asset.
     package_id: str | None = None
+    #: Latest modification time of any file behind the asset, ISO-8601 UTC.
+    #: For a skill, its SKILL.md; for a declaration, the declaring file.
+    modified: str | None = None
 
 
 @dataclass(frozen=True, slots=True)

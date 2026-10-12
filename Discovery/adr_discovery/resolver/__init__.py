@@ -80,6 +80,7 @@ def resolve(observations: tuple[Observation, ...], telemetry: dict[str, str] | N
                 skill_sha256=_skill_sha256(primary),
                 content_hash=next((r.content_hash for r in rows if r.content_hash), None),
                 package_id=next((r.package_id for r in rows if r.package_id), None),
+                modified=max((r.modified for r in rows if r.modified), default=None),
             )
         )
     return tuple(assets)

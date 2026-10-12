@@ -12,6 +12,8 @@ travels beside the data the whole way and is frozen once, at the end.
 
 from __future__ import annotations
 
+from datetime import datetime, timezone
+
 from .catalog.load import EMPTY as EMPTY_CATALOG
 from .catalog.load import Catalog
 from .contracts.evidence import Channel, Evidence
@@ -199,6 +201,7 @@ def _observation_from(gate, candidate: Candidate, verdict) -> Observation:
         content_hash=digest,
         real_path=real_path,
         inode=inode,
+        modified=_modified(stat),
         liveness=Liveness.RUNNING if candidate.kind == "process" else Liveness.INSTALLED,
         evidence=evidence,
         detail=detail,
@@ -209,10 +212,16 @@ def _observation_from_declaration(candidate: Candidate, declaration: Declaration
     detail = {"name": declaration.name, "scope": declaration.scope,
               "declared": True, "command": declaration.command}
     detail.update(declaration.raw)
+    # A skill changes when its SKILL.md does; its directory's own mtime
+    # only moves when files are added or removed.
+    changed_file = declaration.path
+    if declaration.kind is Kind.SKILL:
+        changed_file = f"{declaration.path.rstrip('/')}/SKILL.md"
+    modified = _modified(gate.stat(changed_file)) if gate is not None else None
     if declaration.kind is Kind.SKILL and gate is not None:
         # sha256 of the raw SKILL.md bytes, exactly: the identity a shared
         # artifact list uses. One size-capped read, never partial bytes.
-        digest = content_hash(gate, f"{declaration.path.rstrip('/')}/SKILL.md")
+        digest = content_hash(gate, changed_file)
         if digest:
             detail["skill_sha256"] = digest
     if declaration.kind is not Kind.MCP_SERVER:
@@ -228,6 +237,7 @@ def _observation_from_declaration(candidate: Candidate, declaration: Declaration
         path=declaration.path,
         install_root=_root_of(declaration.path),
         version=version if isinstance(version, str) else None,
+        modified=modified,
         liveness=Liveness.DECLARED_ONLY,
         evidence=(
             Evidence("extractor", Channel.CONFIG, declaration.path,
@@ -302,6 +312,12 @@ def _declarations_by_asset(assets: tuple[Asset, ...], declarations) -> dict[str,
         if found is not None:
             out[asset.asset_id] = found
     return out
+
+
+def _modified(stat) -> str | None:
+    if not stat.ok:
+        return None
+    return datetime.fromtimestamp(stat.value.mtime, timezone.utc).isoformat(timespec="seconds")
 
 
 def _is_file(stat) -> bool:
