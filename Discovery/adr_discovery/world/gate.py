@@ -312,6 +312,7 @@ class Gate:
         logical_root: str,
         max_depth: int | None = None,
         descend: Callable[[str], bool] | None = None,
+        seen: set[str] | None = None,
     ) -> Iterator[Entry]:
         """Breadth-first under the shared entry ceiling.
 
@@ -321,15 +322,24 @@ class Gate:
         this decides cost. Routine skips leave no ledger record -- a
         dependency cache is policy, not a gap in what was seen.
 
+        `seen` holds directories already listed. Pass one set to several
+        walks and a directory reachable from more than one root (`/home` and
+        `/home/alice`, a code root inside a home) is listed, and charged,
+        once; the later walk steps over it and still yields the entry.
+
         Breadth-first on purpose: a budget exhausted late still covered the
         likely places, which is not true of a depth-first walk that spends
         everything in the first deep subtree it meets. Breadth is also taken
         across the root's children, not only by depth: see the queues below.
         """
         depth_cap = self.budget.max_depth if max_depth is None else max_depth
-        seen: set[str] = set()
+        listed = set() if seen is None else seen
+        queued: set[str] = set()
         deepest = 0
         count = 0
+        if logical_root in listed:
+            self.ledger.swept(logical_root, 0, 0)
+            return
 
         # Fair share: one queue per top-level child of the root, served one
         # directory per turn. A single enormous subtree can then spend only
@@ -353,6 +363,9 @@ class Gate:
                 listing = self.list_dir(path)
                 if not listing.ok:
                     continue
+                # Marked when listed, not when queued: a directory a capped
+                # walk never reached must stay available to the next walk.
+                listed.add(path)
                 deepest = max(deepest, depth)
                 prune = self._prune_reason(path, listing.value)
                 for entry in listing.value:
@@ -360,10 +373,15 @@ class Gate:
                     yield entry
                     if prune:
                         continue
-                    if entry.is_dir and not entry.is_symlink and entry.path not in seen:
+                    if (
+                        entry.is_dir
+                        and not entry.is_symlink
+                        and entry.path not in listed
+                        and entry.path not in queued
+                    ):
                         if descend is not None and not descend(entry.path):
                             continue
-                        seen.add(entry.path)
+                        queued.add(entry.path)
                         if depth == 0:
                             queues.append(deque([(entry.path, 1)]))
                         else:

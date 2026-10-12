@@ -7,6 +7,7 @@ the budget numbers are the ones a live scan would produce.
 from __future__ import annotations
 
 from adr_discovery.enumerator import enumerate_candidates
+from adr_discovery.enumerator.sweep import sweep
 from adr_discovery.world.budget import Budget
 
 
@@ -117,3 +118,43 @@ def test_generic_sweep_leaves_the_reserved_entries(world):
 
     assert gate.budget.entries_used <= 1500
     assert gate.budget.entry_cap == 2000, "a stage ceiling must not outlive its stage"
+
+
+def test_nested_root_is_not_listed_twice(world):
+    for i in range(5):
+        world.file(f"/home/u/proj/p{i}/f", "x")
+    world.file("/home/other/f", "x")
+    gate = world.gate()
+    visited: set[str] = set()
+
+    first = [e.path for e in gate.walk("/home/u", seen=visited)]
+    used = gate.budget.entries_used
+    second = [e.path for e in gate.walk("/home", seen=visited)]
+
+    assert sorted(second) == ["/home/other", "/home/other/f", "/home/u"]
+    assert not any(p.startswith("/home/u/") for p in second)
+    assert gate.budget.entries_used == used + 3, "only /home and /home/other are newly charged"
+    assert len(first) == 11
+
+
+def test_sweep_lists_each_directory_once(world):
+    for i in range(5):
+        world.file(f"/Users/alice/src/p{i}/f", "x")
+        world.file(f"/Users/alice/.claude/skills/s{i}/SKILL.md", "x")
+    gate = world.gate()
+    listed: list[str] = []
+    real = gate.list_dir
+
+    def recording(path):
+        listed.append(path)
+        return real(path)
+
+    gate.list_dir = recording
+
+    sweep(gate)
+
+    # Home discovery itself re-lists the home parents; the walks must not.
+    walked = [p for p in listed if p not in ("/Users", "/home")]
+    for path in ("/Users/alice", "/Users/alice/src", "/Users/alice/.claude/skills"):
+        assert walked.count(path) == 1, path
+    assert len(walked) == len(set(walked))

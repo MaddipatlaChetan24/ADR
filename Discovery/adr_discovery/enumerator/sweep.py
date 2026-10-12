@@ -20,13 +20,16 @@ def sweep(gate, include_dependency_caches: bool = False) -> tuple[Candidate, ...
     """
     out: list[Candidate] = []
     seen: set[str] = set()
+    #: Directories already listed, shared by every walk below so nested
+    #: roots and state roots inside a home are each charged once.
+    visited: set[str] = set()
     budget = gate.budget
 
     def descend(path: str) -> bool:
         return in_scope(path, include_dependency_caches)
 
     def scan(root: str, priority: Priority) -> None:
-        for entry in gate.walk(root, descend=descend):
+        for entry in gate.walk(root, descend=descend, seen=visited):
             if not in_scope(entry.path, include_dependency_caches):
                 continue
             name = entry.path.rsplit("/", 1)[-1]
